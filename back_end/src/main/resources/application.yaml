@@ -1,0 +1,25 @@
+spring:
+  application:
+    name: back_end
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/back_end}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:123456}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: ${DB_DDL_AUTO:update}
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+        implicit-strategy: org.hibernate.boot.model.naming.ImplicitNamingStrategyLegacyJpaImpl
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        show_sql: ${DB_SHOW_SQL:true}
+        format_sql: ${DB_FORMAT_SQL:true}
+
+jwt:
+  secret:
+    key: daylachuoimahoabimatrikkei0987654321dacbietracroi
+  expired:
+    access: 864000

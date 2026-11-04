@@ -1,0 +1,84 @@
+services:
+  # -------------------------------------------------------------
+  # 1. Cơ sở dữ liệu PostgreSQL
+  # -------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: trello_work_postgres
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-trello_work}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-123456}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - trello_work_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-trello_work}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - trello_work_network
+
+  # -------------------------------------------------------------
+  # 2. Redis Caching / Realtime Event Sync
+  # -------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: trello_work_redis
+    restart: always
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - trello_work_redis_data:/data
+    networks:
+      - trello_work_network
+
+  # -------------------------------------------------------------
+  # 3. Ứng dụng Backend Spring Boot
+  # -------------------------------------------------------------
+  backend:
+    build:
+      context: ./back_end
+      dockerfile: Dockerfile
+    image: ${BACKEND_IMAGE:-binh/trello-work-backend:latest}
+    container_name: trello_work_backend
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      # Cấu hình DataSource kết nối sang container postgres
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-trello_work}
+      DB_USERNAME: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-123456}
+      DB_DDL_AUTO: update
+      DB_SHOW_SQL: "false"
+
+      # Cấu hình JWT
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-daylachuoimahoabimatrikkei0987654321dacbietracroi}
+      JWT_EXPIRED_ACCESS: ${JWT_EXPIRED_ACCESS:-864000}
+
+      # JVM Memory Optimization cho VPS
+      JAVA_TOOL_OPTIONS: "-Xms256m -Xmx512m -XX:+UseG1GC"
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    networks:
+      - trello_work_network
+
+# ---------------------------------------------------------------
+# Mạng và Ổ đĩa lưu trữ lâu dài
+# ---------------------------------------------------------------
+networks:
+  trello_work_network:
+    driver: bridge
+
+volumes:
+  trello_work_postgres_data:
+    driver: local
+  trello_work_redis_data:
+    driver: local
