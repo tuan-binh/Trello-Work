@@ -11,7 +11,8 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-123456}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      # Ánh xạ ra cổng ngoài 5433 để tránh xung đột nếu VPS đã có sẵn PostgreSQL
+      - "${POSTGRES_PORT:-5433}:5432"
     volumes:
       - trello_work_postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -43,7 +44,7 @@ services:
     build:
       context: ./back_end
       dockerfile: Dockerfile
-    image: ${BACKEND_IMAGE:-binh/trello-work-backend:latest}
+    image: ${BACKEND_IMAGE:-binh1892001/trello-work-backend:latest}
     container_name: trello_work_backend
     restart: always
     depends_on:
@@ -52,7 +53,7 @@ services:
       redis:
         condition: service_started
     environment:
-      # Cấu hình DataSource kết nối sang container postgres
+      # Cấu hình DataSource kết nối sang container postgres qua mạng nội bộ Docker
       DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-trello_work}
       DB_USERNAME: ${POSTGRES_USER:-postgres}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-123456}
@@ -77,7 +78,7 @@ services:
     build:
       context: ./front_end
       dockerfile: Dockerfile
-    image: ${FRONTEND_IMAGE:-binh/trello-work-frontend:latest}
+    image: ${FRONTEND_IMAGE:-binh1892001/trello-work-frontend:latest}
     container_name: trello_work_frontend
     restart: always
     depends_on:
