@@ -89,7 +89,7 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
           command_timeout: 20m
-          envs: COMPOSE_B64,DOCKER_USERNAME
+          envs: COMPOSE_B64,DOCKER_USERNAME,DOCKER_PASSWORD
           script: |
             set -e
             mkdir -p /root/trello_work_project
@@ -110,12 +110,18 @@ jobs:
             fi
             systemctl restart chrony 2>/dev/null || true
 
-            # 1. Đảm bảo hạ tầng Database & Message Broker/Cache chạy trước
+            # 1. Đăng nhập Docker Hub trên VPS nếu có mật khẩu/token (đảm bảo pull được cả repo private)
+            USER_NAME="${DOCKER_USERNAME:-binh}"
+            if [ -n "$DOCKER_PASSWORD" ]; then
+              echo "==> Đang đăng nhập Docker Hub cho user $USER_NAME..."
+              echo "$DOCKER_PASSWORD" | docker login -u "$USER_NAME" --password-stdin || echo "Cảnh báo: Đăng nhập Docker Hub thất bại, sẽ thử pull public..."
+            fi
+
+            # 2. Đảm bảo hạ tầng Database & Message Broker/Cache chạy trước
             echo "==> Khởi động hạ tầng nền tảng (Postgres, Redis)..."
             docker compose up -d postgres redis 2>/dev/null || true
 
-            # 2. Kéo image tuần tự với cơ chế retry tự động
-            USER_NAME="${DOCKER_USERNAME:-binh}"
+            # 3. Kéo image tuần tự với cơ chế retry tự động
             echo "==> Kéo image mới nhất của $USER_NAME từ Docker Hub..."
             pull_with_retry() {
               local img=$1
@@ -136,11 +142,11 @@ jobs:
             pull_with_retry "$USER_NAME/trello-work-backend:latest"
             pull_with_retry "$USER_NAME/trello-work-frontend:latest"
 
-            # 3. Tái khởi động Backend & Frontend với container và code mới nhất
+            # 4. Tái khởi động Backend & Frontend với container và code mới nhất
             echo "==> Cập nhật và chạy lại Backend & Frontend..."
             docker compose up -d --no-deps --force-recreate backend frontend
 
-            # 4. Dọn dẹp các images rác/cũ để giải phóng dung lượng ổ cứng VPS
+            # 5. Dọn dẹp các images rác/cũ để giải phóng dung lượng ổ cứng VPS
             echo "==> Dọn dẹp images cũ..."
             docker image prune -f
 
