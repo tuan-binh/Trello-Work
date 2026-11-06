@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { API_URL } from "../lib/config";
+import { TextField, Checkbox, FormControlLabel } from "@mui/material";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -108,36 +109,36 @@ export default function LoginPage() {
         )}
 
         {/* Login Form */}
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">
               Email tài khoản
             </label>
-            <div className="relative">
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="tenban@congty.com"
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-[#0052cc] focus:border-transparent transition-all bg-slate-50/50 focus:bg-white"
-              />
-              <span className="absolute right-3.5 top-3.5 text-slate-400">
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207"
-                  />
-                </svg>
-              </span>
-            </div>
+            <TextField
+              type="email"
+              required
+              fullWidth
+              size="small"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="tenban@congty.com"
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: "4px",
+                  fontSize: "0.875rem",
+                  backgroundColor: "rgba(248, 250, 252, 0.6)",
+                  "& fieldset": {
+                    borderColor: "#dcdfe4",
+                  },
+                  "&.Mui-focused": {
+                    backgroundColor: "#ffffff",
+                  },
+                  "&.Mui-focused fieldset": {
+                    borderColor: "#0052cc",
+                  },
+                },
+              }}
+            />
           </div>
 
           <div>
@@ -156,47 +157,54 @@ export default function LoginPage() {
                 Quên mật khẩu?
               </a>
             </div>
-            <div className="relative">
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-[#0052cc] focus:border-transparent transition-all bg-slate-50/50 focus:bg-white"
-              />
-              <span className="absolute right-3.5 top-3.5 text-slate-400">
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                  />
-                </svg>
-              </span>
-            </div>
+            <TextField
+              type="password"
+              required
+              fullWidth
+              size="small"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: "4px",
+                  fontSize: "0.875rem",
+                  backgroundColor: "rgba(248, 250, 252, 0.6)",
+                  "& fieldset": {
+                    borderColor: "#dcdfe4",
+                  },
+                  "&.Mui-focused": {
+                    backgroundColor: "#ffffff",
+                  },
+                  "&.Mui-focused fieldset": {
+                    borderColor: "#0052cc",
+                  },
+                },
+              }}
+            />
           </div>
 
           <div className="flex items-center">
-            <input
-              id="remember-me"
-              type="checkbox"
-              checked={rememberMe}
-              onChange={(e) => setRememberMe(e.target.checked)}
-              className="w-4 h-4 text-[#0052cc] border-slate-300 rounded focus:ring-[#0052cc] cursor-pointer"
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  size="small"
+                  sx={{
+                    color: "#94a3b8",
+                    "&.Mui-checked": {
+                      color: "#0052cc",
+                    },
+                  }}
+                />
+              }
+              label={
+                <span className="text-xs text-slate-600 select-none">
+                  Ghi nhớ đăng nhập
+                </span>
+              }
             />
-            <label
-              htmlFor="remember-me"
-              className="ml-2 block text-xs text-slate-600 cursor-pointer select-none"
-            >
-              Ghi nhớ đăng nhập
-            </label>
           </div>
 
           <button

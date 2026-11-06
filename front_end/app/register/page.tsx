@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { API_URL } from "../lib/config";
+import { TextField } from "@mui/material";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -143,18 +144,35 @@ export default function RegisterPage() {
         )}
 
         {/* Register Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-3.5">
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">
               Họ và tên
             </label>
-            <input
+            <TextField
               type="text"
               required
+              fullWidth
+              size="small"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               placeholder="Nguyễn Văn A"
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-[#0052cc] focus:border-transparent transition-all bg-slate-50/50 focus:bg-white"
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: "4px",
+                  fontSize: "0.875rem",
+                  backgroundColor: "rgba(248, 250, 252, 0.6)",
+                  "& fieldset": {
+                    borderColor: "#dcdfe4",
+                  },
+                  "&.Mui-focused": {
+                    backgroundColor: "#ffffff",
+                  },
+                  "&.Mui-focused fieldset": {
+                    borderColor: "#0052cc",
+                  },
+                },
+              }}
             />
           </div>
 
@@ -162,13 +180,30 @@ export default function RegisterPage() {
             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">
               Địa chỉ Email
             </label>
-            <input
+            <TextField
               type="email"
               required
+              fullWidth
+              size="small"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="tenban@congty.com"
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-[#0052cc] focus:border-transparent transition-all bg-slate-50/50 focus:bg-white"
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: "4px",
+                  fontSize: "0.875rem",
+                  backgroundColor: "rgba(248, 250, 252, 0.6)",
+                  "& fieldset": {
+                    borderColor: "#dcdfe4",
+                  },
+                  "&.Mui-focused": {
+                    backgroundColor: "#ffffff",
+                  },
+                  "&.Mui-focused fieldset": {
+                    borderColor: "#0052cc",
+                  },
+                },
+              }}
             />
           </div>
 
@@ -177,26 +212,60 @@ export default function RegisterPage() {
               <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">
                 Mật khẩu
               </label>
-              <input
+              <TextField
                 type="password"
                 required
+                fullWidth
+                size="small"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Tối thiểu 6 ký tự"
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-[#0052cc] focus:border-transparent transition-all bg-slate-50/50 focus:bg-white"
+                sx={{
+                  "& .MuiOutlinedInput-root": {
+                    borderRadius: "4px",
+                    fontSize: "0.875rem",
+                    backgroundColor: "rgba(248, 250, 252, 0.6)",
+                    "& fieldset": {
+                      borderColor: "#dcdfe4",
+                    },
+                    "&.Mui-focused": {
+                      backgroundColor: "#ffffff",
+                    },
+                    "&.Mui-focused fieldset": {
+                      borderColor: "#0052cc",
+                    },
+                  },
+                }}
               />
             </div>
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">
                 Xác nhận
               </label>
-              <input
+              <TextField
                 type="password"
                 required
+                fullWidth
+                size="small"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Nhập lại mật khẩu"
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-[#0052cc] focus:border-transparent transition-all bg-slate-50/50 focus:bg-white"
+                sx={{
+                  "& .MuiOutlinedInput-root": {
+                    borderRadius: "4px",
+                    fontSize: "0.875rem",
+                    backgroundColor: "rgba(248, 250, 252, 0.6)",
+                    "& fieldset": {
+                      borderColor: "#dcdfe4",
+                    },
+                    "&.Mui-focused": {
+                      backgroundColor: "#ffffff",
+                    },
+                    "&.Mui-focused fieldset": {
+                      borderColor: "#0052cc",
+                    },
+                  },
+                }}
               />
             </div>
           </div>
@@ -205,12 +274,29 @@ export default function RegisterPage() {
             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">
               Ảnh đại diện (URL tuỳ chọn)
             </label>
-            <input
+            <TextField
               type="url"
+              fullWidth
+              size="small"
               value={avatarUrl}
               onChange={(e) => setAvatarUrl(e.target.value)}
               placeholder="https://example.com/avatar.jpg"
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-[#0052cc] focus:border-transparent transition-all bg-slate-50/50 focus:bg-white"
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: "4px",
+                  fontSize: "0.875rem",
+                  backgroundColor: "rgba(248, 250, 252, 0.6)",
+                  "& fieldset": {
+                    borderColor: "#dcdfe4",
+                  },
+                  "&.Mui-focused": {
+                    backgroundColor: "#ffffff",
+                  },
+                  "&.Mui-focused fieldset": {
+                    borderColor: "#0052cc",
+                  },
+                },
+              }}
             />
           </div>
 
