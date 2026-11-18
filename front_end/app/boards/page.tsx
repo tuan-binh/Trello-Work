@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { TextField } from "@mui/material";
+import { getBoards, createBoard as createBoardApi, updateBoard as updateBoardApi, getMyWorkspaces, WorkspaceItem, BoardSummary } from "../lib/boardService";
 
 interface BoardItem {
   id: string;
@@ -52,47 +53,7 @@ const COLOR_OPTIONS = [
   { id: "c6", name: "Đỏ hồng quyến rũ", class: "from-rose-500 to-pink-600", preview: "bg-[#c9372c]" },
 ];
 
-const DEFAULT_BOARDS: BoardItem[] = [
-  {
-    id: "1",
-    title: "Dự Án Phát Triển Trello Work 🚀",
-    workspace: "Không gian làm việc chính",
-    bgGradient: "from-blue-600 to-indigo-700",
-    starred: true,
-    recentViewed: "Vừa xong",
-  },
-  {
-    id: "2",
-    title: "Sprint Planning - Q4/2026",
-    workspace: "Không gian làm việc chính",
-    bgGradient: "from-emerald-500 to-teal-700",
-    starred: true,
-    recentViewed: "2 giờ trước",
-  },
-  {
-    id: "3",
-    title: "Thiết Kế UI/UX & Design System",
-    workspace: "Đội ngũ Design",
-    bgGradient: "from-purple-600 to-pink-600",
-    starred: false,
-    recentViewed: "Hôm qua",
-  },
-  {
-    id: "4",
-    title: "Bug Tracking & Hotfixes 🐞",
-    workspace: "Không gian làm việc chính",
-    bgGradient: "from-amber-500 to-orange-600",
-    starred: false,
-    recentViewed: "3 ngày trước",
-  },
-  {
-    id: "5",
-    title: "Kế Hoạch Marketing & Ra Mắt",
-    workspace: "Marketing Hub",
-    bgGradient: "from-rose-500 to-red-700",
-    starred: false,
-  },
-];
+
 
 export default function BoardsDashboardPage() {
   const router = useRouter();
@@ -105,16 +66,52 @@ export default function BoardsDashboardPage() {
   const [activeTab, setActiveTab] = useState<"boards" | "templates" | "home">(
     "boards"
   );
-  const [boards, setBoards] = useState<BoardItem[]>(DEFAULT_BOARDS);
+  const [boards, setBoards] = useState<BoardItem[]>([]);
+  const [workspaces, setWorkspaces] = useState<WorkspaceItem[]>([]);
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<number | null>(null);
+  const [isLoadingBoards, setIsLoadingBoards] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newBoardTitle, setNewBoardTitle] = useState("");
   const [boardBgType, setBoardBgType] = useState<"photo" | "color">("photo");
   const [selectedPhoto, setSelectedPhoto] = useState(PHOTO_OPTIONS[0]);
   const [selectedColor, setSelectedColor] = useState(COLOR_OPTIONS[0]);
-  const [boardVisibility, setBoardVisibility] = useState("Không gian làm việc");
+  const [boardVisibility, setBoardVisibility] = useState("WORKSPACE");
   const [boardTitleTouched, setBoardTitleTouched] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+
+  // Load Workspaces & Boards từ Backend API
+  const fetchWorkspacesAndBoards = async () => {
+    try {
+      setIsLoadingBoards(true);
+      const wsList = await getMyWorkspaces().catch(() => []);
+      setWorkspaces(wsList);
+      if (wsList.length > 0) {
+        setSelectedWorkspaceId(wsList[0].id);
+      }
+
+      const boardDtos = await getBoards().catch(() => []);
+      if (boardDtos && Array.isArray(boardDtos)) {
+        setBoards(
+          boardDtos.map((b) => ({
+            id: b.id.toString(),
+            title: b.title,
+            workspace: b.workspaceName || "Không gian làm việc chính",
+            bgGradient: b.bgGradient,
+            bgImage: b.bgImage,
+            starred: b.starred,
+            recentViewed: b.recentViewed || "Vừa xong",
+          }))
+        );
+      } else {
+        setBoards([]);
+      }
+    } catch {
+      setBoards([]);
+    } finally {
+      setIsLoadingBoards(false);
+    }
+  };
 
   useEffect(() => {
     // Lấy thông tin user đăng nhập từ localStorage
@@ -127,18 +124,7 @@ export default function BoardsDashboardPage() {
       }
     }
 
-    // Đọc danh sách bảng tùy chỉnh từ localStorage
-    try {
-      const customBoardsStr = localStorage.getItem("trello_custom_boards");
-      if (customBoardsStr) {
-        const customBoards: BoardItem[] = JSON.parse(customBoardsStr);
-        setBoards((prev) => {
-          const ids = new Set(prev.map((b) => b.id));
-          const toAdd = customBoards.filter((b) => !ids.has(b.id));
-          return [...toAdd, ...prev];
-        });
-      }
-    } catch {}
+    fetchWorkspacesAndBoards();
 
     // Lắng nghe phím ESC để đóng Modal tạo bảng và Dropdown
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -157,38 +143,67 @@ export default function BoardsDashboardPage() {
     router.push("/login");
   };
 
-  const toggleStar = (id: string, e: React.MouseEvent) => {
+  const toggleStar = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
+    const current = boards.find((b) => b.id === id);
+    if (!current) return;
+    const nextStar = !current.starred;
+
+    // Optimistic UI update
     setBoards((prev) =>
-      prev.map((b) => (b.id === id ? { ...b, starred: !b.starred } : b))
+      prev.map((b) => (b.id === id ? { ...b, starred: nextStar } : b))
     );
+
+    // Call Backend API
+    if (!isNaN(Number(id))) {
+      await updateBoardApi(id, { starred: nextStar }).catch(() => {});
+    }
   };
 
-  const handleCreateBoard = (e: React.FormEvent) => {
+  const handleCreateBoard = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newBoardTitle.trim()) {
       setBoardTitleTouched(true);
       return;
     }
 
-    const newBoard: BoardItem = {
-      id: Date.now().toString(),
-      title: newBoardTitle.trim(),
-      workspace: "Không gian làm việc chính",
-      bgGradient: boardBgType === "color" ? selectedColor.class : undefined,
-      bgImage: boardBgType === "photo" ? selectedPhoto.full : undefined,
-      starred: false,
-      recentViewed: "Vừa xong",
-    };
+    const wsId = selectedWorkspaceId || (workspaces.length > 0 ? workspaces[0].id : undefined);
 
-    setBoards([newBoard, ...boards]);
     try {
-      const customBoardsStr = localStorage.getItem("trello_custom_boards");
-      const list = customBoardsStr ? JSON.parse(customBoardsStr) : [];
-      list.unshift(newBoard);
-      localStorage.setItem("trello_custom_boards", JSON.stringify(list));
-    } catch {}
+      const created = await createBoardApi({
+        workspaceId: wsId as any,
+        title: newBoardTitle.trim(),
+        bgGradient: boardBgType === "color" ? selectedColor.class : undefined,
+        bgImage: boardBgType === "photo" ? selectedPhoto.full : undefined,
+        visibility: boardVisibility === "Riêng tư" ? "PRIVATE" : boardVisibility === "Công khai" ? "PUBLIC" : "WORKSPACE",
+      });
+
+      const newBoardItem: BoardItem = {
+        id: created.id.toString(),
+        title: created.title,
+        workspace: created.workspaceName || "Không gian làm việc",
+        bgGradient: created.bgGradient,
+        bgImage: created.bgImage,
+        starred: created.starred,
+        recentViewed: "Vừa xong",
+      };
+
+      setBoards([newBoardItem, ...boards]);
+    } catch {
+      // Fallback
+      const fallbackBoard: BoardItem = {
+        id: Date.now().toString(),
+        title: newBoardTitle.trim(),
+        workspace: "Không gian làm việc chính",
+        bgGradient: boardBgType === "color" ? selectedColor.class : undefined,
+        bgImage: boardBgType === "photo" ? selectedPhoto.full : undefined,
+        starred: false,
+        recentViewed: "Vừa xong",
+      };
+      setBoards([fallbackBoard, ...boards]);
+    }
+
     setNewBoardTitle("");
     setBoardTitleTouched(false);
     setIsCreateModalOpen(false);

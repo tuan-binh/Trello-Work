@@ -48,6 +48,9 @@ public class Card {
     @Column(name = "cover_url", length = 255)
     private String coverUrl;
 
+    @Column(name = "cover_color", length = 50)
+    private String coverColor;
+
     @Column(name = "due_date")
     private LocalDateTime dueDate;
 

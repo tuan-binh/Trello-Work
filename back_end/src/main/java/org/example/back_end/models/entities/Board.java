@@ -40,6 +40,9 @@ public class Board {
     @Column(name = "background_url", length = 255)
     private String backgroundUrl;
 
+    @Column(name = "bg_gradient", length = 100)
+    private String bgGradient;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private BoardVisibility visibility = BoardVisibility.PRIVATE;

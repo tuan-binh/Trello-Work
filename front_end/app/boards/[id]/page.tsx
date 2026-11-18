@@ -28,6 +28,33 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { TextField, Checkbox } from "@mui/material";
+import {
+  getBoardDetail,
+  updateBoard,
+  createList,
+  updateList,
+  reorderLists,
+  sortList,
+  createCard,
+  updateCard,
+  moveCard,
+  deleteCard,
+  addChecklistItem,
+  updateChecklistItem,
+  deleteChecklistItem,
+  createChecklist,
+  createBoardLabel,
+  addCardLabel,
+  removeCardLabel,
+  addCardMember,
+  removeCardMember,
+  addCardComment,
+  uploadAttachment,
+  deleteAttachment,
+  inviteBoardMember,
+  updateBoardMemberRole,
+  removeBoardMember
+} from "../../lib/boardService";
 
 // --- TYPES ---
 export interface BoardMemberItem {
@@ -118,137 +145,6 @@ export interface BoardData {
   isStarred: boolean;
   lists: ListItem[];
 }
-
-const INITIAL_BOARDS_MAP: Record<string, BoardData> = {
-  "1": {
-    id: "1",
-    title: "Dự Án Phát Triển Trello Work 🚀",
-    workspace: "Không gian làm việc chính",
-    bgGradient: "from-blue-600 via-indigo-600 to-sky-700",
-    isStarred: true,
-    lists: [
-      {
-        id: "l1",
-        title: "Cần làm (To Do)",
-        cards: [
-          {
-            id: "c1",
-            title: "Tích hợp Spring Security với JWT Authentication",
-            description: "Bảo vệ các endpoint với filter JWT và cấp access token.",
-            labels: [
-              { id: "b1", name: "Backend", color: "bg-blue-500 text-white" },
-              { id: "b2", name: "High", color: "bg-red-500 text-white" },
-            ],
-            checklistTotal: 4,
-            checklistDone: 2,
-            commentsCount: 3,
-            comments: [
-              { id: "cm_1", author: "B", authorName: "Nguyễn Văn Bình", text: "Đã cập nhật JwtAuthFilter kiểm tra header Authorization Bearer token.", createdAt: "Hôm qua lúc 14:30", timestamp: Date.now() - 86400000 },
-              { id: "cm_2", author: "N", authorName: "Trần Thị Nga", text: "Đã test với client Postman, token expire sau 24h hoạt động chuẩn.", createdAt: "Hôm qua lúc 16:15", timestamp: Date.now() - 72000000 }
-            ],
-            activities: [
-              { id: "act_1", author: "B", authorName: "Nguyễn Văn Bình", actionText: "đã thêm thẻ này vào Cần làm (To Do)", createdAt: "2 ngày trước", timestamp: Date.now() - 172800000 },
-              { id: "act_2", author: "B", authorName: "Nguyễn Văn Bình", actionText: "đã gắn nhãn", targetText: "Backend, High", createdAt: "2 ngày trước", timestamp: Date.now() - 170000000 },
-              { id: "act_3", author: "N", authorName: "Trần Thị Nga", actionText: "đã thêm hạn chót", targetText: "10 Th11", createdAt: "Hôm qua lúc 11:20", timestamp: Date.now() - 90000000 },
-              { id: "act_4", author: "B", authorName: "Nguyễn Văn Bình", actionText: "đã hoàn thành việc cần làm", targetText: "Tạo Custom UserDetailsService", createdAt: "Hôm qua lúc 15:10", timestamp: Date.now() - 76000000 }
-            ],
-            dueDate: "10 Th11",
-            members: ["B", "N"],
-          },
-          {
-            id: "c2",
-            title: "Cấu hình Flyway migration & MySQL Database",
-            labels: [{ id: "b3", name: "Database", color: "bg-purple-500 text-white" }],
-            checklistTotal: 2,
-            checklistDone: 2,
-            members: ["B"],
-          },
-        ],
-      },
-      {
-        id: "l2",
-        title: "Đang thực hiện (In Progress)",
-        cards: [
-          {
-            id: "c3",
-            title: "Thiết kế giao diện Trello Board View (Next.js + Tailwind)",
-            description: "Gồm thanh board header, các cột danh sách thẻ và kéo thả.",
-            labels: [
-              { id: "f1", name: "Frontend", color: "bg-emerald-500 text-white" },
-              { id: "f2", name: "UI/UX", color: "bg-pink-500 text-white" },
-            ],
-            checklistTotal: 5,
-            checklistDone: 4,
-            commentsCount: 1,
-            comments: [
-              { id: "cm_31", author: "A", authorName: "Lê Tuấn Anh", text: "Layout kéo thả dnd-kit và các cột responsive rất mượt.", createdAt: "3 ngày trước", timestamp: Date.now() - 259200000 }
-            ],
-            activities: [
-              { id: "act_31", author: "B", authorName: "Nguyễn Văn Bình", actionText: "đã chuyển thẻ này từ Cần làm sang", targetText: "Đang thực hiện (In Progress)", createdAt: "3 ngày trước", timestamp: Date.now() - 260000000 },
-              { id: "act_32", author: "A", authorName: "Lê Tuấn Anh", actionText: "đã tham gia thẻ này", createdAt: "2 ngày trước", timestamp: Date.now() - 180000000 },
-              { id: "act_33", author: "B", authorName: "Nguyễn Văn Bình", actionText: "đã thêm tệp đính kèm", targetText: "mockup_kanban_trello.png", createdAt: "Hôm qua lúc 09:45", timestamp: Date.now() - 100000000 }
-            ],
-            dueDate: "06 Th11",
-            members: ["A", "B"],
-          },
-        ],
-      },
-      {
-        id: "l3",
-        title: "Kiểm thử (QA / Review)",
-        cards: [
-          {
-            id: "c4",
-            title: "Test API Login & Register với Postman và SSL https://api.binh.cloud",
-            labels: [{ id: "t1", name: "QA", color: "bg-amber-500 text-white" }],
-            commentsCount: 2,
-            members: ["T"],
-          },
-        ],
-      },
-      {
-        id: "l4",
-        title: "Hoàn thành (Done) 🎉",
-        cards: [
-          {
-            id: "c5",
-            title: "Cấu hình Docker Compose và Nginx Reverse Proxy",
-            labels: [{ id: "d1", name: "DevOps", color: "bg-slate-700 text-white" }],
-            checklistTotal: 3,
-            checklistDone: 3,
-            checklistItems: [
-              { id: "ci1", text: "Viết Dockerfile cho Backend Spring Boot", done: true },
-              { id: "ci2", text: "Cấu hình docker-compose.yml kết nối MySQL", done: true },
-              { id: "ci3", text: "Thiết lập Nginx reverse proxy SSL", done: true },
-            ],
-            dueDate: "05 Th11",
-            isDueComplete: true,
-            commentsCount: 1,
-            comments: [
-              { id: "cm1", author: "B", text: "Đã test chạy mượt mà trên server Ubuntu", createdAt: "Vừa xong" }
-            ],
-            members: ["B"],
-          },
-          {
-            id: "c6",
-            title: "Khởi tạo repo GitHub & CI/CD pipeline",
-            description: "Thiết lập kho lưu trữ GitHub và cấu hình GitHub Actions cho tự động build test.",
-            labels: [{ id: "d2", name: "DevOps", color: "bg-slate-700 text-white" }],
-            checklistTotal: 2,
-            checklistDone: 1,
-            checklistItems: [
-              { id: "ci4", text: "Phân tích yêu cầu và dựng layout", done: true },
-              { id: "ci5", text: "Viết API kết nối CSDL và xử lý lỗi", done: false },
-            ],
-            commentsCount: 0,
-            comments: [],
-            members: ["B"],
-          },
-        ],
-      },
-    ],
-  },
-};
 
 // --- DUE DATE STATUS CALCULATOR (TRELLO LOGIC) ---
 export type DueDateStatus = "completed" | "overdue" | "dueSoon" | "upcoming";
@@ -872,53 +768,132 @@ function BoardContent() {
   const params = useParams();
   const boardId = (params?.id as string) || "1";
 
-  const [board, setBoard] = useState<BoardData>(() => {
-    if (INITIAL_BOARDS_MAP[boardId]) {
-      return INITIAL_BOARDS_MAP[boardId];
-    }
-    return {
-      id: boardId,
-      title: "Bảng Công Việc Mới 📋",
-      workspace: "Không gian làm việc chính",
-      bgGradient: "from-blue-600 via-indigo-600 to-sky-700",
-      isStarred: false,
-      lists: [
-        { id: "l1", title: "Cần làm", cards: [] },
-        { id: "l2", title: "Đang làm", cards: [] },
-        { id: "l3", title: "Hoàn thành", cards: [] },
-      ],
-    };
+  const [board, setBoard] = useState<BoardData>({
+    id: boardId,
+    title: "Đang tải dữ liệu bảng...",
+    workspace: "Không gian làm việc",
+    bgGradient: "from-blue-600 via-indigo-600 to-sky-700",
+    isStarred: false,
+    lists: [],
   });
 
+  // 1. Fetch dữ liệu bảng từ Backend API
   useEffect(() => {
-    // 1. Kiểm tra trong localStorage xem bảng vừa tạo hoặc đã lưu có không
-    try {
-      const customBoardsStr = localStorage.getItem("trello_custom_boards");
-      if (customBoardsStr) {
-        const customBoards = JSON.parse(customBoardsStr);
-        const found = customBoards.find((b: any) => b.id === boardId);
-        if (found) {
-          setBoard({
-            id: found.id,
-            title: found.title,
-            workspace: found.workspace || "Không gian làm việc chính",
-            bgGradient: found.bgGradient,
-            bgImage: found.bgImage,
-            isStarred: found.starred || false,
-            lists: [
-              { id: "l1", title: "Cần làm (To Do)", cards: [] },
-              { id: "l2", title: "Đang thực hiện (In Progress)", cards: [] },
-              { id: "l3", title: "Hoàn thành (Done) 🎉", cards: [] },
-            ],
-          });
-          return;
-        }
-      }
-    } catch {}
+    let isMounted = true;
+    async function loadBoardFromApi() {
+      try {
+        const data = await getBoardDetail(boardId);
+        if (!isMounted || !data) return;
 
-    if (boardId && INITIAL_BOARDS_MAP[boardId]) {
-      setBoard(INITIAL_BOARDS_MAP[boardId]);
+        // Map backend BoardDetailRes -> BoardData
+        const mappedLists: ListItem[] = (data.lists || []).map((l: any) => ({
+          id: String(l.id),
+          title: l.title,
+          isArchived: l.isArchived || false,
+          cards: (l.cards || []).map((c: any) => {
+            const labels: LabelItem[] = (c.labels || []).map((lb: any) => ({
+              id: String(lb.id || "lbl_" + Math.random()),
+              name: lb.name || "",
+              color: lb.color || "bg-blue-600 text-white",
+            }));
+
+            const checklistItems: ChecklistItem[] = [];
+            if (c.checklists && Array.isArray(c.checklists)) {
+              c.checklists.forEach((chk: any) => {
+                if (chk.items && Array.isArray(chk.items)) {
+                  chk.items.forEach((item: any) => {
+                    checklistItems.push({
+                      id: String(item.id),
+                      text: item.content || item.title || item.text || "",
+                      done: !!item.isCompleted,
+                    });
+                  });
+                }
+              });
+            }
+
+            const comments: CommentItem[] = (c.comments || []).map((cm: any) => ({
+              id: String(cm.id),
+              author: (cm.authorName || cm.userName || "U").charAt(0).toUpperCase(),
+              authorName: cm.authorName || cm.userName || "Người dùng",
+              avatarBg: "bg-blue-600",
+              text: cm.content || "",
+              createdAt: cm.createdAt || "Vừa xong",
+              timestamp: Date.now(),
+            }));
+
+            const attachments: AttachmentItem[] = (c.attachments || []).map((at: any) => ({
+              id: String(at.id),
+              name: at.fileName || at.name || "Tệp đính kèm",
+              url: at.fileUrl || at.url || "",
+              size: at.fileSize || "1.0 MB",
+              createdAt: at.createdAt || "Vừa xong",
+              isCover: !!at.isCover,
+            }));
+
+            return {
+              id: String(c.id),
+              title: c.title,
+              description: c.description || "",
+              labels,
+              checklistTotal: checklistItems.length,
+              checklistDone: checklistItems.filter((it) => it.done).length,
+              checklistItems,
+              commentsCount: comments.length,
+              comments,
+              activities: [],
+              dueDate: c.dueDate || undefined,
+              isDueComplete: !!c.isDueComplete,
+              members: (c.members || []).map((m: any) => typeof m === "string" ? m : m.initials || (m.name ? m.name.charAt(0) : "M")),
+              coverUrl: c.coverUrl || undefined,
+              coverColor: c.coverColor || undefined,
+              attachments,
+              isArchived: !!c.isArchived,
+            } as CardItem;
+          }),
+        }));
+
+        setBoard({
+          id: String(data.id),
+          title: data.title,
+          workspace: (data.workspace as any) || (data as any).workspaceName || "Không gian làm việc chính",
+          bgGradient: data.bgGradient || "from-blue-600 via-indigo-600 to-sky-700",
+          bgImage: (data.bgImage as any) || (data as any).coverUrl || undefined,
+          isStarred: !!data.starred,
+          lists: mappedLists,
+        });
+
+        if (data.labels && Array.isArray(data.labels) && data.labels.length > 0) {
+          setSystemLabels(data.labels.map((lb: any) => ({
+            id: String(lb.id),
+            name: lb.name || "",
+            color: lb.color || "bg-[#0c66e4] text-white",
+          })));
+        }
+
+        if (data.members && Array.isArray(data.members)) {
+          setBoardMembersList(
+            data.members.map((m: any) => ({
+              id: String(m.id),
+              name: m.fullName || m.name || m.username || "Thành viên",
+              email: m.email || "",
+              initials: (m.fullName || m.name || m.username || "U").charAt(0).toUpperCase(),
+              avatarBg: "bg-indigo-600",
+              role: (m.role as any) || "MEMBER",
+              status: m.status || "ACTIVE",
+            }))
+          );
+        }
+      } catch (err) {
+        console.warn("Chưa thể kết nối tới Backend API hoặc bảng không tồn tại:", err);
+      }
     }
+
+    loadBoardFromApi();
+    return () => { isMounted = false; };
+  }, [boardId]);
+
+  useEffect(() => {
 
     // Lắng nghe phím ESC để đóng Modal chi tiết thẻ và Bộ lọc thẻ
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -1172,22 +1147,28 @@ function BoardContent() {
 
   // 1. Lưu mô tả
   const handleSaveDescription = () => {
+    const desc = cardDescriptionDraft.trim();
     if (selectedCard) {
       logCardActivity(selectedCard.card.id, "đã cập nhật mô tả thẻ");
+      updateCard(selectedCard.card.id, { description: desc }).catch((err) =>
+        console.warn("Lỗi cập nhật mô tả trên backend:", err)
+      );
     }
     updateCurrentCard((c) => ({
       ...c,
-      description: cardDescriptionDraft.trim(),
+      description: desc,
     }));
     setIsEditingDescription(false);
   };
 
   // 2. Thêm checklist item
-  const handleAddChecklistItem = () => {
+  const handleAddChecklistItem = async () => {
     if (!newChecklistText.trim() || !selectedCard) return;
+    const text = newChecklistText.trim();
+    const tempItemId = "ci_" + Date.now();
     const newItem: ChecklistItem = {
-      id: "ci_" + Date.now(),
-      text: newChecklistText.trim(),
+      id: tempItemId,
+      text,
       done: false,
     };
     updateCurrentCard((c) => {
@@ -1199,16 +1180,36 @@ function BoardContent() {
         checklistDone: items.filter((i) => i.done).length,
       };
     });
-    logCardActivity(selectedCard.card.id, "đã thêm việc cần làm", newItem.text);
+    logCardActivity(selectedCard.card.id, "đã thêm việc cần làm", text);
     setNewChecklistText("");
     setIsAddingChecklistItem(false);
+
+    try {
+      // Backend: tạo checklist nếu chưa có hoặc thêm vào checklist đầu tiên
+      const createdChecklist = await createChecklist(selectedCard.card.id, "Việc cần làm");
+      if (createdChecklist && createdChecklist.id) {
+        const addedItem = await addChecklistItem(createdChecklist.id, text);
+        if (addedItem && addedItem.id) {
+          updateCurrentCard((c) => ({
+            ...c,
+            checklistItems: (c.checklistItems || []).map((it) =>
+              it.id === tempItemId ? { ...it, id: String(addedItem.id) } : it
+            ),
+          }));
+        }
+      }
+    } catch (err) {
+      console.warn("Lỗi đồng bộ checklist với backend:", err);
+    }
   };
 
   // 3. Toggle checklist item
   const handleToggleChecklistItem = (itemId: string) => {
+    let nextDone = false;
     if (selectedCard) {
       const item = selectedCard.card.checklistItems?.find((i) => i.id === itemId);
       if (item) {
+        nextDone = !item.done;
         logCardActivity(selectedCard.card.id, item.done ? "đã đánh dấu chưa xong" : "đã hoàn thành việc cần làm", item.text);
       }
     }
@@ -1223,6 +1224,10 @@ function BoardContent() {
         checklistDone: items.filter((i) => i.done).length,
       };
     });
+
+    updateChecklistItem(itemId, { done: nextDone }).catch((err) =>
+      console.warn("Lỗi cập nhật checklist item trên backend:", err)
+    );
   };
 
   // 4. Xóa checklist item
@@ -1236,17 +1241,23 @@ function BoardContent() {
         checklistDone: items.filter((i) => i.done).length,
       };
     });
+
+    deleteChecklistItem(itemId).catch((err) =>
+      console.warn("Lỗi xóa checklist item trên backend:", err)
+    );
   };
 
   // 5. Thêm bình luận
-  const handleAddComment = () => {
+  const handleAddComment = async () => {
     if (!newCommentText.trim() || !selectedCard) return;
+    const commentContent = newCommentText.trim();
+    const tempCommentId = "cm_" + Date.now();
     const newComment: CommentItem = {
-      id: "cm_" + Date.now(),
+      id: tempCommentId,
       author: "B",
       authorName: "Nguyễn Văn Bình",
       avatarBg: "bg-blue-600",
-      text: newCommentText.trim(),
+      text: commentContent,
       createdAt: "Vừa xong",
       timestamp: Date.now(),
     };
@@ -1260,6 +1271,20 @@ function BoardContent() {
       };
     });
     setNewCommentText("");
+
+    try {
+      const created = await addCardComment(selectedCard.card.id, commentContent);
+      if (created && created.id) {
+        updateCurrentCard((c) => ({
+          ...c,
+          comments: (c.comments || []).map((cm) =>
+            cm.id === tempCommentId ? { ...cm, id: String(created.id) } : cm
+          ),
+        }));
+      }
+    } catch (err) {
+      console.warn("Lỗi gửi bình luận lên backend:", err);
+    }
   };
 
   // 6. Toggle thành viên trên thẻ
@@ -1267,6 +1292,20 @@ function BoardContent() {
     if (selectedCard) {
       const exists = selectedCard.card.members.includes(member);
       logCardActivity(selectedCard.card.id, exists ? "đã gỡ thành viên" : "đã thêm thành viên", member);
+
+      // Tìm user id tương ứng trong boardMembersList nếu có
+      const matchedUser = boardMembersList.find((m) => m.initials === member || m.id === member || m.email === member);
+      const targetUserId = matchedUser ? matchedUser.id : member;
+
+      if (exists) {
+        removeCardMember(selectedCard.card.id, targetUserId).catch((err) =>
+          console.warn("Lỗi gỡ thành viên trên backend:", err)
+        );
+      } else {
+        addCardMember(selectedCard.card.id, targetUserId).catch((err) =>
+          console.warn("Lỗi thêm thành viên trên backend:", err)
+        );
+      }
     }
     updateCurrentCard((c) => {
       const exists = c.members.includes(member);
@@ -1282,6 +1321,16 @@ function BoardContent() {
     if (selectedCard) {
       const exists = selectedCard.card.labels.some((l) => l.id === label.id);
       logCardActivity(selectedCard.card.id, exists ? "đã gỡ nhãn" : "đã gắn nhãn", label.name || "Nhãn");
+
+      if (exists) {
+        removeCardLabel(selectedCard.card.id, label.id).catch((err) =>
+          console.warn("Lỗi gỡ nhãn khỏi thẻ trên backend:", err)
+        );
+      } else {
+        addCardLabel(selectedCard.card.id, label.id).catch((err) =>
+          console.warn("Lỗi gán nhãn vào thẻ trên backend:", err)
+        );
+      }
     }
     updateCurrentCard((c) => {
       const exists = c.labels.some(
@@ -1298,16 +1347,20 @@ function BoardContent() {
 
   // 8. Đặt ngày hết hạn
   const handleSetDueDate = (dateStr: string) => {
+    const formattedDate = dateStr.trim() ? dateStr : undefined;
     if (selectedCard) {
       if (dateStr.trim()) {
         logCardActivity(selectedCard.card.id, "đã đặt ngày hết hạn", dateStr.trim());
       } else {
         logCardActivity(selectedCard.card.id, "đã xóa ngày hết hạn");
       }
+      updateCard(selectedCard.card.id, { dueDate: formattedDate, isDueComplete: false }).catch((err) =>
+        console.warn("Lỗi cập nhật dueDate trên backend:", err)
+      );
     }
     updateCurrentCard((c) => ({
       ...c,
-      dueDate: dateStr.trim() ? dateStr : undefined,
+      dueDate: formattedDate,
       isDueComplete: false,
     }));
     setCardModalMenu(null);
@@ -1316,8 +1369,20 @@ function BoardContent() {
   // 8.1. Toggle hoàn thành ngày hết hạn (Checkbox trên mặt thẻ và trong modal)
   const handleToggleDueDateCard = (cardId: string, e?: React.MouseEvent) => {
     if (e) {
-      e.stopPropagation(); // Không trigger mở modal thẻ khi click checkbox
+      e.stopPropagation();
     }
+    let targetCard = selectedCard?.card.id === cardId ? selectedCard.card : null;
+    if (!targetCard) {
+      for (const l of board.lists) {
+        const found = l.cards.find((c) => c.id === cardId);
+        if (found) {
+          targetCard = found;
+          break;
+        }
+      }
+    }
+    const nextStatus = targetCard ? !targetCard.isDueComplete : true;
+
     setBoard((prevBoard) => ({
       ...prevBoard,
       lists: prevBoard.lists.map((l) => ({
@@ -1328,7 +1393,6 @@ function BoardContent() {
       })),
     }));
 
-    // Cập nhật luôn nếu đang mở trong selectedCard
     setSelectedCard((prev) => {
       if (prev && prev.card.id === cardId) {
         return {
@@ -1338,10 +1402,13 @@ function BoardContent() {
       }
       return prev;
     });
+
+    updateCard(cardId, { isDueComplete: nextStatus }).catch((err) =>
+      console.warn("Lỗi cập nhật hoàn thành dueDate trên backend:", err)
+    );
   };
 
-  // 9. Lưu trữ / Xóa thẻ
-    // 8.1. Thêm tệp đính kèm
+  // 8.1. Thêm tệp đính kèm
   const handleAddAttachment = (name: string, url: string, size?: string) => {
     const newAtt: AttachmentItem = {
       id: "att_" + Date.now(),
@@ -1371,12 +1438,15 @@ function BoardContent() {
         coverUrl: isRemovedCover ? undefined : c.coverUrl,
       };
     });
+    deleteAttachment(attId).catch((err) =>
+      console.warn("Lỗi xóa file đính kèm trên backend:", err)
+    );
   };
 
   // 8.3. Đặt / Hủy ảnh bìa từ đính kèm
   const handleToggleCoverAttachment = (att: AttachmentItem) => {
+    const willBeCover = selectedCard?.card.coverUrl !== att.url;
     updateCurrentCard((c) => {
-      const willBeCover = c.coverUrl !== att.url;
       const atts = (c.attachments || []).map((a) => ({
         ...a,
         isCover: a.id === att.id ? willBeCover : false,
@@ -1388,12 +1458,21 @@ function BoardContent() {
         coverColor: willBeCover ? undefined : c.coverColor,
       };
     });
+    if (selectedCard) {
+      updateCard(selectedCard.card.id, { coverUrl: willBeCover ? att.url : "" }).catch((err) =>
+        console.warn("Lỗi cập nhật ảnh bìa trên backend:", err)
+      );
+    }
   };
 
   // 8.4. Đặt màu bìa (Cover Color)
   const handleSetCoverColor = (colorClass: string) => {
     if (selectedCard) {
       logCardActivity(selectedCard.card.id, "đã thay đổi màu bìa thẻ");
+      const nextColor = selectedCard.card.coverColor === colorClass ? "" : colorClass;
+      updateCard(selectedCard.card.id, { coverColor: nextColor, coverUrl: "" }).catch((err) =>
+        console.warn("Lỗi cập nhật coverColor trên backend:", err)
+      );
     }
     updateCurrentCard((c) => ({
       ...c,
@@ -1404,6 +1483,12 @@ function BoardContent() {
 
   // 8.5. Đặt ảnh bìa (Cover Image URL)
   const handleSetCoverUrl = (url: string) => {
+    const nextUrl = selectedCard?.card.coverUrl === url ? "" : url;
+    if (selectedCard) {
+      updateCard(selectedCard.card.id, { coverUrl: nextUrl, coverColor: "" }).catch((err) =>
+        console.warn("Lỗi cập nhật coverUrl trên backend:", err)
+      );
+    }
     updateCurrentCard((c) => ({
       ...c,
       coverUrl: c.coverUrl === url ? undefined : url,
@@ -1413,6 +1498,11 @@ function BoardContent() {
 
   // 8.6. Xóa toàn bộ ảnh/màu bìa
   const handleRemoveCover = () => {
+    if (selectedCard) {
+      updateCard(selectedCard.card.id, { coverUrl: "", coverColor: "" }).catch((err) =>
+        console.warn("Lỗi xóa bìa thẻ trên backend:", err)
+      );
+    }
     updateCurrentCard((c) => ({
       ...c,
       coverUrl: undefined,
@@ -1434,6 +1524,9 @@ function BoardContent() {
     if (selectedCard && selectedCard.card.id === cardId) {
       setSelectedCard(null);
     }
+    updateCard(cardId, { isArchived: true }).catch((err) =>
+      console.warn("Lỗi lưu trữ thẻ trên backend:", err)
+    );
   };
 
   // 9.1. Khôi phục thẻ từ thùng lưu trữ
@@ -1445,6 +1538,9 @@ function BoardContent() {
         cards: l.cards.map((c) => (c.id === cardId ? { ...c, isArchived: false } : c)),
       })),
     }));
+    updateCard(cardId, { isArchived: false }).catch((err) =>
+      console.warn("Lỗi khôi phục thẻ trên backend:", err)
+    );
   };
 
   // 9.2. Mở Modal xác nhận xóa vĩnh viễn
@@ -1467,6 +1563,10 @@ function BoardContent() {
       setSelectedCard(null);
     }
     setCardToDeleteId(null);
+
+    deleteCard(targetId).catch((err) =>
+      console.warn("Lỗi xóa vĩnh viễn thẻ trên backend:", err)
+    );
   };
 
   // 9.3. Lưu trữ Danh sách (Cột)
@@ -1475,6 +1575,9 @@ function BoardContent() {
       ...prev,
       lists: prev.lists.map((l) => (l.id === listId ? { ...l, isArchived: true } : l)),
     }));
+    updateList(listId, { isArchived: true }).catch((err) =>
+      console.warn("Lỗi lưu trữ danh sách trên backend:", err)
+    );
   };
 
   // 9.4. Khôi phục Danh sách (Cột)
@@ -1483,6 +1586,9 @@ function BoardContent() {
       ...prev,
       lists: prev.lists.map((l) => (l.id === listId ? { ...l, isArchived: false } : l)),
     }));
+    updateList(listId, { isArchived: false }).catch((err) =>
+      console.warn("Lỗi khôi phục danh sách trên backend:", err)
+    );
   };
 
   // 9.5. Sắp xếp các thẻ trong Danh sách
@@ -1501,6 +1607,9 @@ function BoardContent() {
         return { ...l, cards: sortedCards };
       }),
     }));
+    sortList(listId, sortType === "title" ? "TITLE_ASC" : "DUE_DATE_ASC").catch((err) =>
+      console.warn("Lỗi đồng bộ sắp xếp cột trên backend:", err)
+    );
   };
 
   // --- FILTER STATES (Trello Style Filter) ---
@@ -1520,39 +1629,11 @@ function BoardContent() {
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteSuccessMsg, setInviteSuccessMsg] = useState<string | null>(null);
 
-  // Danh sách thành viên trong Board
-  const [boardMembersList, setBoardMembersList] = useState<BoardMemberItem[]>([
-    {
-      id: "u_1",
-      name: "Nguyễn Văn Bình (Bạn)",
-      email: "binh@trello.work",
-      initials: "B",
-      avatarBg: "bg-blue-700",
-      role: "ADMIN",
-      status: "ACTIVE",
-    },
-    {
-      id: "u_2",
-      name: "Trần Thị Nga",
-      email: "nga.tran@company.com",
-      initials: "N",
-      avatarBg: "bg-emerald-600",
-      role: "MEMBER",
-      status: "ACTIVE",
-    },
-    {
-      id: "u_3",
-      name: "Lê Tuấn Anh",
-      email: "tuananh.le@tech.io",
-      initials: "T",
-      avatarBg: "bg-purple-600",
-      role: "MEMBER",
-      status: "ACTIVE",
-    },
-  ]);
+  // Danh sách thành viên trong Board (lấy động từ Backend)
+  const [boardMembersList, setBoardMembersList] = useState<BoardMemberItem[]>([]);
 
   // Handler mời thành viên mới vào Board
-  const handleInviteMember = (e: React.FormEvent) => {
+  const handleInviteMember = async (e: React.FormEvent) => {
     e.preventDefault();
     setInviteError(null);
     setInviteSuccessMsg(null);
@@ -1573,8 +1654,9 @@ function BoardContent() {
     const colors = ["bg-amber-600", "bg-rose-600", "bg-indigo-600", "bg-teal-600", "bg-cyan-600"];
     const randomBg = colors[Math.floor(Math.random() * colors.length)];
 
+    const tempId = "u_" + Date.now();
     const newMember: BoardMemberItem = {
-      id: "u_" + Date.now(),
+      id: tempId,
       name: emailOrName.includes("@") ? namePart : emailOrName,
       email: emailOrName.includes("@") ? emailOrName : namePart.toLowerCase() + "@workspace.io",
       initials,
@@ -1587,12 +1669,29 @@ function BoardContent() {
     setInviteInput("");
     setInviteSuccessMsg("Đã gửi thư mời đến " + newMember.email + ". Đang chờ người dùng mở email xác nhận.");
     setTimeout(() => setInviteSuccessMsg(null), 3000);
+
+    try {
+      const invited = await inviteBoardMember(boardId, {
+        email: newMember.email,
+        role: inviteRole,
+      });
+      if (invited && invited.id) {
+        setBoardMembersList((prev) =>
+          prev.map((m) => (m.id === tempId ? { ...m, id: String(invited.id) } : m))
+        );
+      }
+    } catch (err: any) {
+      console.warn("Lỗi gửi lời mời thành viên lên backend:", err);
+    }
   };
 
   // Handler đổi quyền thành viên
   const handleChangeMemberRole = (memberId: string, newRole: "ADMIN" | "MEMBER" | "OBSERVER") => {
     setBoardMembersList((prev) =>
       prev.map((m) => (m.id === memberId ? { ...m, role: newRole } : m))
+    );
+    updateBoardMemberRole(boardId, memberId, { role: newRole }).catch((err) =>
+      console.warn("Lỗi đổi quyền thành viên trên backend:", err)
     );
   };
 
@@ -1603,6 +1702,9 @@ function BoardContent() {
       return;
     }
     setBoardMembersList((prev) => prev.filter((m) => m.id !== memberId));
+    removeBoardMember(boardId, memberId).catch((err) =>
+      console.warn("Lỗi xóa thành viên trên backend:", err)
+    );
   };
 
   // Handler sao chép liên kết mời
@@ -1852,44 +1954,77 @@ function BoardContent() {
   };
 
   // Handlers
-  const handleAddCard = (listId: string) => {
+  const handleAddCard = async (listId: string) => {
     if (!newCardTitle.trim()) return;
+    const title = newCardTitle.trim();
+    const tempId = "c_" + Date.now();
 
     const newCard: CardItem = {
-      id: "c_" + Date.now(),
-      title: newCardTitle.trim(),
+      id: tempId,
+      title,
       labels: [{ id: "l_def", name: "Task", color: "bg-blue-500 text-white" }],
       members: ["B"],
     };
 
+    // Optimistic UI update
     setBoard((prev) => ({
       ...prev,
       lists: prev.lists.map((l) =>
         l.id === listId ? { ...l, cards: [...l.cards, newCard] } : l
       ),
     }));
-
     setNewCardTitle("");
     setAddingCardListId(null);
+
+    // Call API Backend
+    try {
+      const created = await createCard(listId, { title });
+      if (created && created.id) {
+        setBoard((prev) => ({
+          ...prev,
+          lists: prev.lists.map((l) => ({
+            ...l,
+            cards: l.cards.map((c) => (c.id === tempId ? { ...c, id: String(created.id) } : c)),
+          })),
+        }));
+      }
+    } catch (err) {
+      console.warn("Lỗi đồng bộ tạo thẻ với Backend API:", err);
+    }
   };
 
-  const handleAddList = (e: React.FormEvent) => {
+  const handleAddList = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newListTitle.trim()) return;
+    const title = newListTitle.trim();
+    const tempId = "l_" + Date.now();
 
     const newList: ListItem = {
-      id: "l_" + Date.now(),
-      title: newListTitle.trim(),
+      id: tempId,
+      title,
       cards: [],
     };
 
+    // Optimistic UI update
     setBoard((prev) => ({
       ...prev,
       lists: [...prev.lists, newList],
     }));
-
     setNewListTitle("");
     setIsAddingList(false);
+
+    // Call API Backend
+    try {
+      const created = await createList(boardId, { title });
+      if (created && created.id) {
+        setBoard((prev) => ({
+          ...prev,
+          lists: prev.lists.map((l) => (l.id === tempId ? { ...l, id: String(created.id) } : l)),
+        }));
+      }
+    } catch (err) {
+      console.warn("Lỗi đồng bộ tạo danh sách với Backend API:", err);
+    }
   };
 
   // Drag Handlers
@@ -2048,10 +2183,42 @@ function BoardContent() {
         const oldIndex = prev.lists.findIndex((l) => l.id === activeId);
         const newIndex = prev.lists.findIndex((l) => l.id === overId);
         if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return prev;
+        const reordered = arrayMove(prev.lists, oldIndex, newIndex);
+        
+        // Gọi API reorder backend
+        const listOrders = reordered.map((l, idx) => ({
+          listId: Number(l.id) || idx + 1,
+          position: idx + 1,
+        }));
+        reorderLists(boardId, { listOrders }).catch((err) =>
+          console.warn("Lỗi cập nhật thứ tự cột trên backend:", err)
+        );
+
         return {
           ...prev,
-          lists: arrayMove(prev.lists, oldIndex, newIndex),
+          lists: reordered,
         };
+      });
+      return;
+    }
+
+    const isActiveACard = active.data.current?.type === "Card";
+    if (isActiveACard) {
+      // Tìm vị trí hiện tại của card sau khi kéo thả kết thúc để đồng bộ backend
+      setBoard((currentBoard) => {
+        for (const l of currentBoard.lists) {
+          const cardIdx = l.cards.findIndex((c) => c.id === activeId);
+          if (cardIdx !== -1) {
+            moveCard(String(activeId), {
+              targetListId: Number(l.id) || 1,
+              targetPosition: cardIdx + 1,
+            }).catch((err) =>
+              console.warn("Lỗi đồng bộ vị trí thẻ trên backend:", err)
+            );
+            break;
+          }
+        }
+        return currentBoard;
       });
     }
   };
@@ -2107,7 +2274,13 @@ function BoardContent() {
           </h1>
 
           <button
-            onClick={() => setBoard({ ...board, isStarred: !board.isStarred })}
+            onClick={() => {
+              const nextStarred = !board.isStarred;
+              setBoard({ ...board, isStarred: nextStarred });
+              updateBoard(board.id, { starred: nextStarred }).catch((err) =>
+                console.warn("Lỗi cập nhật trạng thái yêu thích của bảng trên backend:", err)
+              );
+            }}
             className="p-1.5 hover:bg-white/15 rounded-md text-white/80 hover:text-amber-300 transition-colors cursor-pointer"
             title="Đánh dấu sao"
           >
@@ -3026,13 +3199,15 @@ function BoardContent() {
               style={{
                 position: "fixed",
                 top: Math.max(16, Math.min(window.innerHeight - 340, quickEditCard.rect.top)),
-                left: Math.max(16, quickEditCard.rect.left),
-                width: Math.max(300, quickEditCard.rect.width + 36),
+                left: Math.max(16, Math.min(window.innerWidth - 560, quickEditCard.rect.left)),
               }}
-              className="flex items-start gap-2.5 animate-in zoom-in-95 duration-150 select-none z-50"
+              className="flex items-start gap-2.5 animate-in zoom-in-95 duration-150 select-none z-50 w-max"
             >
-              {/* CỘT 1: THẺ SOẠN THẢO TRỰC TIẾP + NÚT LƯU */}
-              <div className="flex-1 flex flex-col gap-2.5">
+              {/* CỘT 1: THẺ SOẠN THẢO TRỰC TIẾP + NÚT LƯU (Đúng bằng chiều rộng của thẻ gốc) */}
+              <div
+                style={{ width: Math.max(260, quickEditCard.rect.width) }}
+                className="flex flex-col gap-2.5 shrink-0"
+              >
                 {/* Thẻ mô phỏng chính xác thẻ hiện tại với Textarea */}
                 <div className="bg-white rounded-lg shadow-2xl border border-slate-200 overflow-hidden text-slate-800">
                   {/* Ảnh bìa hoặc màu bìa nếu có */}
@@ -4823,13 +4998,12 @@ function BoardContent() {
                 >
                   {/* --- SUBMENU 1: THÀNH VIÊN TRONG THẺ (CHUẨN TRELLO LIGHT THEME VỚI 2 SECTION) --- */}
                   {cardModalMenu === "members" && (() => {
-                    const boardMembers = [
-                      { id: "B", name: "P.T. Bình", initials: "PB", color: "bg-[#00a3bf] text-white" },
-                      { id: "N", name: "Minh Chu Dinh", initials: "MD", color: "bg-[#0c66e4] text-white" },
-                      { id: "T", name: "Tuấn Trần", initials: "TT", color: "bg-[#e56910] text-white" },
-                      { id: "A", name: "Anh Nguyễn", initials: "AN", color: "bg-[#1f845a] text-white" },
-                      { id: "P", name: "phamtuanbinh.189", initials: "P", color: "bg-slate-500 text-white" },
-                    ];
+                    const boardMembers = boardMembersList.map((m) => ({
+                      id: m.initials || m.id,
+                      name: m.name,
+                      initials: m.initials,
+                      color: m.avatarBg + " text-white",
+                    }));
 
                     const q = memberSearchQuery.trim().toLowerCase();
                     const filtered = boardMembers.filter((m) =>
@@ -4947,43 +5121,7 @@ function BoardContent() {
 
                   {/* POPUP 4: ĐÍNH KÈM (ATTACHMENT POPUP CHUẨN TRELLO LIGHT THEME) */}
                   {cardModalMenu === "attachment" && (() => {
-                    const recentViewedItems = [
-                      {
-                        id: "r1",
-                        title: "agile_scrum_hethongbanhang",
-                        subtitle: "Trello Không gian ...",
-                        time: "Đã xem 2 ngày trước",
-                        type: "trello",
-                      },
-                      {
-                        id: "r2",
-                        title: "UI sửa danh mục",
-                        subtitle: "agile_scrum_heth...",
-                        time: "Đã xem 3 ngày trước",
-                        type: "card",
-                      },
-                      {
-                        id: "r3",
-                        title: "Công việc hàng ngày",
-                        subtitle: "Trello Không gian ...",
-                        time: "Đã xem 3 ngày trước",
-                        type: "trello",
-                      },
-                      {
-                        id: "r4",
-                        title: "[FE] - Xây dựng giao diện trang đăn...",
-                        subtitle: "traveloca",
-                        time: "Đã xem 3 ngày trước",
-                        type: "card",
-                      },
-                      {
-                        id: "r5",
-                        title: "Todo",
-                        subtitle: "Trello Không gian ...",
-                        time: "Đã xem 4 ngày trước",
-                        type: "trello",
-                      },
-                    ];
+                    const recentViewedItems: any[] = [];
 
                     return (
                       <div className="w-[320px] sm:w-[340px] bg-white rounded-xl shadow-2xl border border-slate-200 p-4 text-slate-800 animate-in fade-in zoom-in-95 duration-100">
@@ -5019,14 +5157,30 @@ function BoardContent() {
                             <input
                               type="file"
                               className="hidden"
-                              onChange={(e) => {
+                              onChange={async (e) => {
                                 const file = e.target.files?.[0];
                                 if (file) {
-                                  const url = URL.createObjectURL(file);
+                                  const tempUrl = URL.createObjectURL(file);
                                   const sizeStr = (file.size / (1024 * 1024)).toFixed(1) + " MB";
-                                  handleAddAttachment(file.name, url, sizeStr);
+                                  handleAddAttachment(file.name, tempUrl, sizeStr);
                                   setCardModalMenu(null);
                                   setMenuAnchorRect(null);
+
+                                  if (selectedCard) {
+                                    try {
+                                      const res = await uploadAttachment(selectedCard.card.id, file);
+                                      if (res && res.url) {
+                                        updateCurrentCard((c) => ({
+                                          ...c,
+                                          attachments: (c.attachments || []).map((at) =>
+                                            at.url === tempUrl ? { ...at, url: res.url, id: String(res.id || at.id) } : at
+                                          ),
+                                        }));
+                                      }
+                                    } catch (err) {
+                                      console.warn("Lỗi upload tệp đính kèm lên server:", err);
+                                    }
+                                  }
                                 }
                               }}
                             />
@@ -5256,14 +5410,31 @@ function BoardContent() {
                               type="file"
                               accept="image/*"
                               className="hidden"
-                              onChange={(e) => {
+                              onChange={async (e) => {
                                 const file = e.target.files?.[0];
                                 if (file) {
-                                  const url = URL.createObjectURL(file);
-                                  handleSetCoverUrl(url);
-                                  handleAddAttachment(file.name, url, (file.size / (1024 * 1024)).toFixed(1) + " MB");
+                                  const tempUrl = URL.createObjectURL(file);
+                                  handleSetCoverUrl(tempUrl);
+                                  handleAddAttachment(file.name, tempUrl, (file.size / (1024 * 1024)).toFixed(1) + " MB");
                                   setCardModalMenu(null);
                                   setMenuAnchorRect(null);
+
+                                  if (selectedCard) {
+                                    try {
+                                      const res = await uploadAttachment(selectedCard.card.id, file, true);
+                                      if (res && res.url) {
+                                        updateCurrentCard((c) => ({
+                                          ...c,
+                                          coverUrl: res.url,
+                                          attachments: (c.attachments || []).map((at) =>
+                                            at.url === tempUrl ? { ...at, url: res.url, isCover: true, id: String(res.id || at.id) } : at
+                                          ),
+                                        }));
+                                      }
+                                    } catch (err) {
+                                      console.warn("Lỗi upload ảnh bìa lên server:", err);
+                                    }
+                                  }
                                 }
                               }}
                             />

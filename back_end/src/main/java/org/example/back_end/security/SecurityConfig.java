@@ -52,9 +52,12 @@ public class SecurityConfig
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(
                         url -> url
+                                .requestMatchers("/api/v1/auth/**").permitAll()
+                                .requestMatchers("/uploads/**").permitAll()
+                                .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
                                 .requestMatchers("/api/v1/admin/**").hasAuthority(RoleName.ROLE_SUPER_ADMIN.name())
                                 .requestMatchers("/api/v1/user/**").hasAuthority(RoleName.ROLE_SYSTEM_USER.name())
-                                .anyRequest().permitAll()
+                                .anyRequest().authenticated()
                 )
                 .authenticationProvider(authenticationProvider())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -63,7 +66,7 @@ public class SecurityConfig
                                 .authenticationEntryPoint(jwtEntryPoint)
                                 .accessDeniedHandler(accessDenied)
                 )
-                .addFilterAfter(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
 

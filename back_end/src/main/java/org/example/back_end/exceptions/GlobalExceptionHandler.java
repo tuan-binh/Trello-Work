@@ -181,11 +181,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ErrorResponse> handleDataIntegrityViolationException(
             DataIntegrityViolationException ex, HttpServletRequest request) {
-        log.error("Database integrity violation: {}", ex.getMessage());
+        log.error("Database integrity violation: ", ex);
+        String detailedMsg = ex.getRootCause() != null ? ex.getRootCause().getMessage() : ex.getMessage();
         ErrorResponse response = ErrorResponse.builder()
                 .status(HttpStatus.CONFLICT.value())
                 .error(HttpStatus.CONFLICT.getReasonPhrase())
-                .message("Database constraint error: duplicate key or invalid foreign key reference")
+                .message("Database constraint error: " + detailedMsg)
                 .path(request.getRequestURI())
                 .timestamp(LocalDateTime.now())
                 .build();
