@@ -30,6 +30,16 @@ import { CSS } from "@dnd-kit/utilities";
 import { TextField, Checkbox } from "@mui/material";
 
 // --- TYPES ---
+export interface BoardMemberItem {
+  id: string;
+  name: string;
+  email: string;
+  initials: string;
+  avatarBg: string;
+  role: "ADMIN" | "MEMBER" | "OBSERVER";
+  status?: "ACTIVE" | "PENDING";
+}
+
 export interface LabelItem {
   id: string;
   name: string;
@@ -42,11 +52,34 @@ export interface ChecklistItem {
   done: boolean;
 }
 
+export interface ActivityItem {
+  id: string;
+  author: string;
+  authorName?: string;
+  avatarBg?: string;
+  actionText: string;
+  targetText?: string;
+  createdAt: string;
+  timestamp: number;
+}
+
 export interface CommentItem {
   id: string;
   author: string;
+  authorName?: string;
+  avatarBg?: string;
   text: string;
   createdAt: string;
+  timestamp?: number;
+}
+
+export interface AttachmentItem {
+  id: string;
+  name: string;
+  url: string;
+  size?: string;
+  createdAt: string;
+  isCover?: boolean;
 }
 
 export interface CardItem {
@@ -59,14 +92,21 @@ export interface CardItem {
   checklistItems?: ChecklistItem[];
   commentsCount?: number;
   comments?: CommentItem[];
+  activities?: ActivityItem[];
   dueDate?: string;
+  isDueComplete?: boolean;
   members: string[];
+  coverUrl?: string;
+  coverColor?: string;
+  attachments?: AttachmentItem[];
+  isArchived?: boolean;
 }
 
 export interface ListItem {
   id: string;
   title: string;
   cards: CardItem[];
+  isArchived?: boolean;
 }
 
 export interface BoardData {
@@ -102,6 +142,16 @@ const INITIAL_BOARDS_MAP: Record<string, BoardData> = {
             checklistTotal: 4,
             checklistDone: 2,
             commentsCount: 3,
+            comments: [
+              { id: "cm_1", author: "B", authorName: "Nguyễn Văn Bình", text: "Đã cập nhật JwtAuthFilter kiểm tra header Authorization Bearer token.", createdAt: "Hôm qua lúc 14:30", timestamp: Date.now() - 86400000 },
+              { id: "cm_2", author: "N", authorName: "Trần Thị Nga", text: "Đã test với client Postman, token expire sau 24h hoạt động chuẩn.", createdAt: "Hôm qua lúc 16:15", timestamp: Date.now() - 72000000 }
+            ],
+            activities: [
+              { id: "act_1", author: "B", authorName: "Nguyễn Văn Bình", actionText: "đã thêm thẻ này vào Cần làm (To Do)", createdAt: "2 ngày trước", timestamp: Date.now() - 172800000 },
+              { id: "act_2", author: "B", authorName: "Nguyễn Văn Bình", actionText: "đã gắn nhãn", targetText: "Backend, High", createdAt: "2 ngày trước", timestamp: Date.now() - 170000000 },
+              { id: "act_3", author: "N", authorName: "Trần Thị Nga", actionText: "đã thêm hạn chót", targetText: "10 Th11", createdAt: "Hôm qua lúc 11:20", timestamp: Date.now() - 90000000 },
+              { id: "act_4", author: "B", authorName: "Nguyễn Văn Bình", actionText: "đã hoàn thành việc cần làm", targetText: "Tạo Custom UserDetailsService", createdAt: "Hôm qua lúc 15:10", timestamp: Date.now() - 76000000 }
+            ],
             dueDate: "10 Th11",
             members: ["B", "N"],
           },
@@ -129,7 +179,15 @@ const INITIAL_BOARDS_MAP: Record<string, BoardData> = {
             ],
             checklistTotal: 5,
             checklistDone: 4,
-            commentsCount: 6,
+            commentsCount: 1,
+            comments: [
+              { id: "cm_31", author: "A", authorName: "Lê Tuấn Anh", text: "Layout kéo thả dnd-kit và các cột responsive rất mượt.", createdAt: "3 ngày trước", timestamp: Date.now() - 259200000 }
+            ],
+            activities: [
+              { id: "act_31", author: "B", authorName: "Nguyễn Văn Bình", actionText: "đã chuyển thẻ này từ Cần làm sang", targetText: "Đang thực hiện (In Progress)", createdAt: "3 ngày trước", timestamp: Date.now() - 260000000 },
+              { id: "act_32", author: "A", authorName: "Lê Tuấn Anh", actionText: "đã tham gia thẻ này", createdAt: "2 ngày trước", timestamp: Date.now() - 180000000 },
+              { id: "act_33", author: "B", authorName: "Nguyễn Văn Bình", actionText: "đã thêm tệp đính kèm", targetText: "mockup_kanban_trello.png", createdAt: "Hôm qua lúc 09:45", timestamp: Date.now() - 100000000 }
+            ],
             dueDate: "06 Th11",
             members: ["A", "B"],
           },
@@ -163,6 +221,8 @@ const INITIAL_BOARDS_MAP: Record<string, BoardData> = {
               { id: "ci2", text: "Cấu hình docker-compose.yml kết nối MySQL", done: true },
               { id: "ci3", text: "Thiết lập Nginx reverse proxy SSL", done: true },
             ],
+            dueDate: "05 Th11",
+            isDueComplete: true,
             commentsCount: 1,
             comments: [
               { id: "cm1", author: "B", text: "Đã test chạy mượt mà trên server Ubuntu", createdAt: "Vừa xong" }
@@ -190,94 +250,227 @@ const INITIAL_BOARDS_MAP: Record<string, BoardData> = {
   },
 };
 
+// --- DUE DATE STATUS CALCULATOR (TRELLO LOGIC) ---
+export type DueDateStatus = "completed" | "overdue" | "dueSoon" | "upcoming";
+
+export function getDueDateStatus(dueDate?: string, isDueComplete?: boolean): {
+  status: DueDateStatus;
+  badgeBg: string;
+  badgeText: string;
+  badgeBorder: string;
+  checkboxBg: string;
+  label: string;
+} {
+  if (!dueDate) {
+    return {
+      status: "upcoming",
+      badgeBg: "bg-slate-100",
+      badgeText: "text-slate-600",
+      badgeBorder: "border-slate-200",
+      checkboxBg: "border-slate-400",
+      label: "",
+    };
+  }
+
+  // 1. If completed (checked)
+  if (isDueComplete) {
+    return {
+      status: "completed",
+      badgeBg: "bg-emerald-600 hover:bg-emerald-700",
+      badgeText: "text-white",
+      badgeBorder: "border-emerald-700",
+      checkboxBg: "bg-white text-emerald-600 border-white",
+      label: "Đã hoàn tất",
+    };
+  }
+
+  // 2. Parse due date (e.g. "06 Th11", "07 Th11", "10 Th11" in 2026)
+  const match = dueDate.match(/(\d+)\s*(?:Th|\/)(\d+)/i);
+  let dueTime = 0;
+  if (match) {
+    const day = parseInt(match[1], 10);
+    const month = parseInt(match[2], 10) - 1; // 0-indexed
+    dueTime = new Date(2026, month, day, 23, 59, 59).getTime();
+  } else {
+    dueTime = new Date(2026, 10, 10, 23, 59, 59).getTime();
+  }
+
+  // Today reference is Nov 7, 2026 in the demo
+  const now = new Date(2026, 10, 7, 12, 0, 0).getTime();
+  const diffHours = (dueTime - now) / (1000 * 60 * 60);
+
+  if (diffHours < 0) {
+    // Overdue -> ĐỎ (RED)
+    return {
+      status: "overdue",
+      badgeBg: "bg-[#ffd5d2] hover:bg-[#fdd0cd]",
+      badgeText: "text-[#ae2e24] font-semibold",
+      badgeBorder: "border-transparent",
+      checkboxBg: "border-[#ae2e24]/70 hover:bg-[#ae2e24]/10",
+      label: "Quá hạn",
+    };
+  } else if (diffHours <= 24) {
+    // Due soon -> VÀNG (YELLOW)
+    return {
+      status: "dueSoon",
+      badgeBg: "bg-amber-400 hover:bg-amber-500",
+      badgeText: "text-slate-900 font-semibold",
+      badgeBorder: "border-amber-500",
+      checkboxBg: "border-slate-800/80 hover:bg-black/10",
+      label: "Sắp hết hạn",
+    };
+  } else {
+    // Upcoming -> XÁM NHẸ (LIGHT GRAY)
+    return {
+      status: "upcoming",
+      badgeBg: "bg-slate-100 hover:bg-slate-200",
+      badgeText: "text-slate-600",
+      badgeBorder: "border-slate-200",
+      checkboxBg: "border-slate-400 hover:border-slate-600",
+      label: "Chưa tới hạn",
+    };
+  }
+}
+
 // --- CARD PRESENTATIONAL VIEW ---
 function CardView({
   card,
   listTitle,
   onClick,
+  onToggleDueDate,
+  onQuickEdit,
   isOverlay = false,
 }: {
   card: CardItem;
   listTitle?: string;
   onClick?: () => void;
+  onToggleDueDate?: (cardId: string, e: React.MouseEvent) => void;
+  onQuickEdit?: (card: CardItem, listTitle: string, e: React.MouseEvent) => void;
   isOverlay?: boolean;
 }) {
+  const dueInfo = card.dueDate ? getDueDateStatus(card.dueDate, card.isDueComplete) : null;
   return (
     <div
       onClick={onClick}
-      className={`bg-white rounded-lg p-3 shadow-xs hover:shadow-md border border-slate-200 hover:border-slate-300 transition-all text-slate-800 ${
+      className={`bg-white rounded-lg shadow-xs hover:shadow-md border border-slate-200 hover:border-slate-300 transition-all text-slate-800 overflow-hidden ${
         isOverlay ? "cursor-grabbing shadow-xl" : "cursor-grab active:cursor-grabbing group"
       }`}
     >
-      {/* Labels */}
-      {card.labels && card.labels.length > 0 && (
-        <div className="flex flex-wrap gap-1 mb-2">
-          {card.labels.map((lb) => (
-            <span
-              key={lb.id}
-              className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${lb.color}`}
-            >
-              {lb.name}
-            </span>
-          ))}
+      {/* 1. Cover Image or Cover Color Banner */}
+      {card.coverUrl ? (
+        <div className="w-full h-32 bg-slate-100 overflow-hidden relative">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={card.coverUrl}
+            alt="cover"
+            className="w-full h-full object-cover pointer-events-none"
+          />
         </div>
-      )}
+      ) : card.coverColor ? (
+        <div className={`w-full h-8 ${card.coverColor}`} />
+      ) : null}
 
-      {/* Card Title */}
-      <h4 className="text-sm font-medium text-slate-800 leading-snug break-words">
-        {card.title}
-      </h4>
+      <div className="p-3 relative group/card">
+        {/* Quick Edit Pencil Button (Chuẩn Trello: hover hiện nút bút chì ở góc trên phải) */}
+        {!isOverlay && onQuickEdit && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onQuickEdit(card, listTitle || "", e);
+            }}
+            title="Chỉnh sửa nhanh (Phím tắt: e)"
+            className="absolute top-2 right-2 w-7 h-7 bg-slate-100/90 hover:bg-slate-200 text-slate-600 hover:text-slate-900 rounded-md shadow-xs opacity-0 group-hover/card:opacity-100 transition-opacity flex items-center justify-center cursor-pointer z-10"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+            </svg>
+          </button>
+        )}
 
-      {/* Badges / Metrics */}
-      <div className="mt-3 flex items-center justify-between text-slate-500 text-xs">
-        <div className="flex items-center gap-2.5">
-          {card.dueDate && (
-            <span className="flex items-center gap-1 text-slate-600 font-medium bg-slate-100 px-1.5 py-0.5 rounded">
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              {card.dueDate}
-            </span>
-          )}
-
-          {card.checklistTotal !== undefined && (
-            <span
-              className={`flex items-center gap-1 font-medium ${
-                card.checklistDone === card.checklistTotal
-                  ? "text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded"
-                  : ""
-              }`}
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              {card.checklistDone}/{card.checklistTotal}
-            </span>
-          )}
-
-          {card.commentsCount && (
-            <span className="flex items-center gap-1">
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-              </svg>
-              {card.commentsCount}
-            </span>
-          )}
-        </div>
-
-        {/* Member Avatars */}
-        {card.members && (
-          <div className="flex items-center -space-x-1">
-            {card.members.map((m, idx) => (
+        {/* Labels */}
+        {card.labels && card.labels.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-2 pr-6">
+            {card.labels.map((lb) => (
               <span
-                key={idx}
-                className="w-5 h-5 rounded-full bg-[#0c66e4] text-white text-[10px] font-bold flex items-center justify-center border border-white"
+                key={lb.id}
+                className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${lb.color}`}
               >
-                {m}
+                {lb.name}
               </span>
             ))}
           </div>
         )}
+
+        {/* Card Title */}
+        <h4 className="text-sm font-medium text-slate-800 leading-snug break-words pr-5">
+          {card.title}
+        </h4>
+
+        {/* Badges / Metrics */}
+        <div className="mt-3 flex items-center justify-between text-slate-500 text-xs">
+          <div className="flex items-center gap-2.5">
+            {card.dueDate && dueInfo && (
+              <span
+                title={`Hạn chót: ${card.dueDate} (${dueInfo.label})`}
+                className={`flex items-center gap-1.5 px-2 py-0.5 rounded-sm text-xs font-medium transition-all select-none ${dueInfo.badgeBg} ${dueInfo.badgeText}`}
+              >
+                <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span className="leading-tight">{card.dueDate}</span>
+              </span>
+            )}
+
+            {/* Attachment Badge (Trello Paperclip) */}
+            {card.attachments && card.attachments.length > 0 && (
+              <span className="flex items-center gap-1 text-slate-600 font-medium" title={`${card.attachments.length} tệp đính kèm`}>
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                </svg>
+                {card.attachments.length}
+              </span>
+            )}
+
+            {card.checklistTotal !== undefined && (
+              <span
+                className={`flex items-center gap-1 font-medium ${
+                  card.checklistDone === card.checklistTotal
+                    ? "text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded"
+                    : ""
+                }`}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {card.checklistDone}/{card.checklistTotal}
+              </span>
+            )}
+
+            {card.commentsCount && (
+              <span className="flex items-center gap-1">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                </svg>
+                {card.commentsCount}
+              </span>
+            )}
+          </div>
+
+          {/* Member Avatars */}
+          {card.members && (
+            <div className="flex items-center -space-x-1">
+              {card.members.map((m, idx) => (
+                <span
+                  key={idx}
+                  className="w-5 h-5 rounded-full bg-[#0c66e4] text-white text-[10px] font-bold flex items-center justify-center border border-white"
+                >
+                  {m}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -288,11 +481,15 @@ function SortableCard({
   card,
   listTitle,
   onSelect,
+  onToggleDueDate,
+  onQuickEdit,
   activeCardHeight,
 }: {
   card: CardItem;
   listTitle: string;
   onSelect: (card: CardItem, listTitle: string) => void;
+  onToggleDueDate?: (cardId: string, e: React.MouseEvent) => void;
+  onQuickEdit?: (card: CardItem, listTitle: string, rect: DOMRect) => void;
   activeCardHeight?: number;
 }) {
   const cardRef = useRef<HTMLDivElement | null>(null);
@@ -342,6 +539,13 @@ function SortableCard({
     );
   }
 
+  const handleTriggerQuickEdit = (e?: React.MouseEvent) => {
+    if (cardRef.current && onQuickEdit) {
+      const rect = cardRef.current.getBoundingClientRect();
+      onQuickEdit(card, listTitle, rect);
+    }
+  };
+
   return (
     <div
       ref={(node) => {
@@ -351,12 +555,27 @@ function SortableCard({
       style={style}
       {...attributes}
       {...listeners}
-      className="touch-none"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "e" || e.key === "E") {
+          // If not typing in input/textarea, trigger Quick Edit
+          const activeTag = document.activeElement?.tagName.toLowerCase();
+          if (activeTag !== "input" && activeTag !== "textarea") {
+            e.preventDefault();
+            handleTriggerQuickEdit();
+          }
+        }
+      }}
+      className="touch-none outline-none focus:ring-1 focus:ring-[#0c66e4] rounded-lg"
     >
       <CardView
         card={card}
         listTitle={listTitle}
         onClick={() => onSelect(card, listTitle)}
+        onToggleDueDate={onToggleDueDate}
+        onQuickEdit={(c, lt, e) => {
+          handleTriggerQuickEdit(e);
+        }}
       />
     </div>
   );
@@ -366,21 +585,29 @@ function SortableCard({
 function SortableColumn({
   list,
   onSelectCard,
+  onToggleDueDate,
+  onQuickEdit,
   addingCardListId,
   setAddingCardListId,
   newCardTitle,
   setNewCardTitle,
   onAddCard,
   activeCardHeight,
+  onArchiveList,
+  onSortList,
 }: {
   list: ListItem;
   onSelectCard: (card: CardItem, listTitle: string) => void;
+  onToggleDueDate?: (cardId: string, e: React.MouseEvent) => void;
+  onQuickEdit?: (card: CardItem, listTitle: string, rect: DOMRect) => void;
   addingCardListId: string | null;
   setAddingCardListId: (id: string | null) => void;
   newCardTitle: string;
   setNewCardTitle: (t: string) => void;
   onAddCard: (listId: string) => void;
   activeCardHeight?: number;
+  onArchiveList?: (listId: string) => void;
+  onSortList?: (listId: string, sortType: "title" | "date") => void;
 }) {
   const {
     attributes,
@@ -406,6 +633,7 @@ function SortableColumn({
 
   const columnRef = useRef<HTMLDivElement | null>(null);
   const [columnHeight, setColumnHeight] = useState<number | undefined>(undefined);
+  const [isColumnMenuOpen, setIsColumnMenuOpen] = useState(false);
 
   useEffect(() => {
     if (!isDragging && columnRef.current) {
@@ -454,11 +682,91 @@ function SortableColumn({
           <span className="text-xs bg-slate-200 text-slate-700 font-bold px-1.5 py-0.5 rounded-full">
             {list.cards.length}
           </span>
-          <button className="hover:bg-slate-200 p-1 rounded-md transition-colors cursor-pointer">
-            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M6 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm12 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
-            </svg>
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => setIsColumnMenuOpen(!isColumnMenuOpen)}
+              className="hover:bg-slate-200 p-1 rounded-md transition-colors cursor-pointer"
+              title="Thao tác với danh sách"
+            >
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M6 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm12 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
+              </svg>
+            </button>
+
+            {isColumnMenuOpen && (
+              <div
+                onClick={(e) => e.stopPropagation()}
+                className="absolute right-0 top-full mt-1.5 w-64 bg-white rounded-xl shadow-2xl border border-slate-200 p-2 z-30 text-slate-800 animate-in fade-in duration-100"
+              >
+                <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100 px-1">
+                  <span className="text-xs font-bold text-slate-700">Thao tác danh sách</span>
+                  <button
+                    onClick={() => setIsColumnMenuOpen(false)}
+                    className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-700 cursor-pointer text-xs"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="space-y-1 text-xs">
+                  <button
+                    onClick={() => {
+                      setAddingCardListId(list.id);
+                      setNewCardTitle("");
+                      setIsColumnMenuOpen(false);
+                    }}
+                    className="w-full text-left px-2.5 py-1.5 hover:bg-slate-100 rounded-md font-medium text-slate-700 cursor-pointer flex items-center gap-2"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Thêm thẻ mới
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      if (onSortList) onSortList(list.id, "title");
+                      setIsColumnMenuOpen(false);
+                    }}
+                    className="w-full text-left px-2.5 py-1.5 hover:bg-slate-100 rounded-md font-medium text-slate-700 cursor-pointer flex items-center gap-2"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+                    </svg>
+                    Sắp xếp theo tên thẻ (A - Z)
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      if (onSortList) onSortList(list.id, "date");
+                      setIsColumnMenuOpen(false);
+                    }}
+                    className="w-full text-left px-2.5 py-1.5 hover:bg-slate-100 rounded-md font-medium text-slate-700 cursor-pointer flex items-center gap-2"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    Sắp xếp theo ngày hạn chót
+                  </button>
+
+                  <div className="border-t border-slate-100 my-1 pt-1">
+                    <button
+                      onClick={() => {
+                        if (onArchiveList) onArchiveList(list.id);
+                        setIsColumnMenuOpen(false);
+                      }}
+                      className="w-full text-left px-2.5 py-1.5 hover:bg-red-50 text-red-600 rounded-md font-medium cursor-pointer flex items-center gap-2"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                      </svg>
+                      Lưu trữ danh sách này (Archive)
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -471,6 +779,8 @@ function SortableColumn({
               card={card}
               listTitle={list.title}
               onSelect={onSelectCard}
+              onToggleDueDate={onToggleDueDate}
+              onQuickEdit={onQuickEdit}
               activeCardHeight={activeCardHeight}
             />
           ))}
@@ -666,9 +976,17 @@ function BoardContent() {
   const [newChecklistText, setNewChecklistText] = useState("");
   const [isAddingChecklistItem, setIsAddingChecklistItem] = useState(false);
   const [newCommentText, setNewCommentText] = useState("");
-  const [cardModalMenu, setCardModalMenu] = useState<"members" | "labels" | "checklist" | "dueDate" | null>(null);
+  const [cardModalMenu, setCardModalMenu] = useState<"members" | "labels" | "checklist" | "dueDate" | "attachment" | "cover" | null>(null);
   const [menuAnchorRect, setMenuAnchorRect] = useState<{ top: number; left: number; right: number; bottom: number } | null>(null);
   const [customDueDate, setCustomDueDate] = useState("");
+  const [activityTab, setActivityTab] = useState<"all" | "comments" | "history">("all");
+  // Quick Edit Card State
+  const [quickEditCard, setQuickEditCard] = useState<{
+    card: CardItem;
+    listTitle: string;
+    rect: { top: number; left: number; width: number; height: number };
+  } | null>(null);
+  const [quickEditTitle, setQuickEditTitle] = useState("");
   // Trello Date Picker States (Calendar & Controls)
   const [calendarYear, setCalendarYear] = useState(2026);
   const [calendarMonth, setCalendarMonth] = useState(10); // 0-indexed (10 = November)
@@ -688,6 +1006,8 @@ function BoardContent() {
   const [isCreatingNewLabel, setIsCreatingNewLabel] = useState(false);
   const [newLabelTitle, setNewLabelTitle] = useState("");
   const [newLabelColor, setNewLabelColor] = useState("bg-blue-600 text-white");
+  const [attachmentLinkUrl, setAttachmentLinkUrl] = useState("");
+  const [attachmentLinkName, setAttachmentLinkName] = useState("");
 
   // Danh sách các bảng màu chuẩn Trello cho nhãn (tổng cộng 8 nhãn)
   const [systemLabels, setSystemLabels] = useState<LabelItem[]>([
@@ -733,6 +1053,92 @@ function BoardContent() {
     }
   }, [selectedCard?.card.id]);
 
+      // Handler mở Quick Edit
+  const handleOpenQuickEdit = (card: CardItem, listTitle: string, rect: DOMRect) => {
+    setQuickEditCard({
+      card,
+      listTitle,
+      rect: {
+        top: Math.max(10, rect.top),
+        left: rect.left,
+        width: rect.width,
+        height: rect.height,
+      },
+    });
+    setQuickEditTitle(card.title);
+  };
+
+  // Handler lưu tiêu đề nhanh trong Quick Edit
+  const handleSaveQuickEditTitle = () => {
+    if (!quickEditCard) return;
+    const trimmed = quickEditTitle.trim();
+    if (trimmed && trimmed !== quickEditCard.card.title) {
+      const cardId = quickEditCard.card.id;
+      setBoard((prev) => ({
+        ...prev,
+        lists: prev.lists.map((l) => ({
+          ...l,
+          cards: l.cards.map((c) => (c.id === cardId ? { ...c, title: trimmed } : c)),
+        })),
+      }));
+      logCardActivity(cardId, "đã đổi tên thẻ thành", trimmed);
+    }
+    setQuickEditCard(null);
+  };
+
+  // Handler lưu trữ nhanh thẻ từ Quick Edit
+  const handleQuickArchiveCard = () => {
+    if (!quickEditCard) return;
+    handleArchiveCard(quickEditCard.card.id);
+    setQuickEditCard(null);
+  };
+
+  // Handler mở modal to đầy đủ từ Quick Edit
+  const handleQuickOpenFullCard = () => {
+    if (!quickEditCard) return;
+    setSelectedCard({ card: quickEditCard.card, listTitle: quickEditCard.listTitle });
+    setQuickEditCard(null);
+  };
+
+  // Hàm ghi lại hoạt động tự động vào thẻ (Activity Log)
+  const logCardActivity = (cardId: string, actionText: string, targetText?: string) => {
+    const newAct: ActivityItem = {
+      id: "act_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6),
+      author: "B",
+      authorName: "Nguyễn Văn Bình",
+      avatarBg: "bg-blue-600",
+      actionText,
+      targetText,
+      createdAt: "Vừa xong",
+      timestamp: Date.now(),
+    };
+
+    setBoard((prev) => ({
+      ...prev,
+      lists: prev.lists.map((l) => ({
+        ...l,
+        cards: l.cards.map((c) =>
+          c.id === cardId
+            ? { ...c, activities: [newAct, ...(c.activities || [])] }
+            : c
+        ),
+      })),
+    }));
+
+    setSelectedCard((prev) => {
+      if (prev && prev.card.id === cardId) {
+        return {
+          ...prev,
+          card: {
+            ...prev.card,
+            activities: [newAct, ...(prev.card.activities || [])],
+          },
+        };
+      }
+      return prev;
+    });
+  };
+
   // Hàm cập nhật thẻ hiện tại vào board state và selectedCard state
   const updateCurrentCard = (updater: (prevCard: CardItem) => CardItem) => {
     if (!selectedCard) return;
@@ -766,6 +1172,9 @@ function BoardContent() {
 
   // 1. Lưu mô tả
   const handleSaveDescription = () => {
+    if (selectedCard) {
+      logCardActivity(selectedCard.card.id, "đã cập nhật mô tả thẻ");
+    }
     updateCurrentCard((c) => ({
       ...c,
       description: cardDescriptionDraft.trim(),
@@ -790,12 +1199,19 @@ function BoardContent() {
         checklistDone: items.filter((i) => i.done).length,
       };
     });
+    logCardActivity(selectedCard.card.id, "đã thêm việc cần làm", newItem.text);
     setNewChecklistText("");
     setIsAddingChecklistItem(false);
   };
 
   // 3. Toggle checklist item
   const handleToggleChecklistItem = (itemId: string) => {
+    if (selectedCard) {
+      const item = selectedCard.card.checklistItems?.find((i) => i.id === itemId);
+      if (item) {
+        logCardActivity(selectedCard.card.id, item.done ? "đã đánh dấu chưa xong" : "đã hoàn thành việc cần làm", item.text);
+      }
+    }
     updateCurrentCard((c) => {
       const items = (c.checklistItems || []).map((item) =>
         item.id === itemId ? { ...item, done: !item.done } : item
@@ -828,9 +1244,13 @@ function BoardContent() {
     const newComment: CommentItem = {
       id: "cm_" + Date.now(),
       author: "B",
+      authorName: "Nguyễn Văn Bình",
+      avatarBg: "bg-blue-600",
       text: newCommentText.trim(),
       createdAt: "Vừa xong",
+      timestamp: Date.now(),
     };
+    logCardActivity(selectedCard.card.id, "đã để lại bình luận");
     updateCurrentCard((c) => {
       const comments = [...(c.comments || []), newComment];
       return {
@@ -844,6 +1264,10 @@ function BoardContent() {
 
   // 6. Toggle thành viên trên thẻ
   const handleToggleCardMember = (member: string) => {
+    if (selectedCard) {
+      const exists = selectedCard.card.members.includes(member);
+      logCardActivity(selectedCard.card.id, exists ? "đã gỡ thành viên" : "đã thêm thành viên", member);
+    }
     updateCurrentCard((c) => {
       const exists = c.members.includes(member);
       const members = exists
@@ -855,6 +1279,10 @@ function BoardContent() {
 
   // 7. Toggle nhãn trên thẻ (so khớp theo id hoặc kết hợp name + color)
   const handleToggleCardLabel = (label: LabelItem) => {
+    if (selectedCard) {
+      const exists = selectedCard.card.labels.some((l) => l.id === label.id);
+      logCardActivity(selectedCard.card.id, exists ? "đã gỡ nhãn" : "đã gắn nhãn", label.name || "Nhãn");
+    }
     updateCurrentCard((c) => {
       const exists = c.labels.some(
         (l) => l.id === label.id || (l.name === label.name && l.color === label.color)
@@ -870,28 +1298,323 @@ function BoardContent() {
 
   // 8. Đặt ngày hết hạn
   const handleSetDueDate = (dateStr: string) => {
+    if (selectedCard) {
+      if (dateStr.trim()) {
+        logCardActivity(selectedCard.card.id, "đã đặt ngày hết hạn", dateStr.trim());
+      } else {
+        logCardActivity(selectedCard.card.id, "đã xóa ngày hết hạn");
+      }
+    }
     updateCurrentCard((c) => ({
       ...c,
       dueDate: dateStr.trim() ? dateStr : undefined,
+      isDueComplete: false,
     }));
     setCardModalMenu(null);
   };
 
+  // 8.1. Toggle hoàn thành ngày hết hạn (Checkbox trên mặt thẻ và trong modal)
+  const handleToggleDueDateCard = (cardId: string, e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation(); // Không trigger mở modal thẻ khi click checkbox
+    }
+    setBoard((prevBoard) => ({
+      ...prevBoard,
+      lists: prevBoard.lists.map((l) => ({
+        ...l,
+        cards: l.cards.map((c) =>
+          c.id === cardId ? { ...c, isDueComplete: !c.isDueComplete } : c
+        ),
+      })),
+    }));
+
+    // Cập nhật luôn nếu đang mở trong selectedCard
+    setSelectedCard((prev) => {
+      if (prev && prev.card.id === cardId) {
+        return {
+          ...prev,
+          card: { ...prev.card, isDueComplete: !prev.card.isDueComplete },
+        };
+      }
+      return prev;
+    });
+  };
+
   // 9. Lưu trữ / Xóa thẻ
-  const handleArchiveCard = () => {
-    if (!selectedCard) return;
-    const cardId = selectedCard.card.id;
+    // 8.1. Thêm tệp đính kèm
+  const handleAddAttachment = (name: string, url: string, size?: string) => {
+    const newAtt: AttachmentItem = {
+      id: "att_" + Date.now(),
+      name,
+      url,
+      size: size || "1.2 MB",
+      createdAt: "Vừa xong",
+      isCover: false,
+    };
+    if (selectedCard) {
+      logCardActivity(selectedCard.card.id, "đã đính kèm tệp", name);
+    }
+    updateCurrentCard((c) => ({
+      ...c,
+      attachments: [...(c.attachments || []), newAtt],
+    }));
+  };
+
+  // 8.2. Xóa tệp đính kèm
+  const handleDeleteAttachment = (attId: string) => {
+    updateCurrentCard((c) => {
+      const atts = (c.attachments || []).filter((a) => a.id !== attId);
+      const isRemovedCover = c.attachments?.find((a) => a.id === attId)?.isCover;
+      return {
+        ...c,
+        attachments: atts,
+        coverUrl: isRemovedCover ? undefined : c.coverUrl,
+      };
+    });
+  };
+
+  // 8.3. Đặt / Hủy ảnh bìa từ đính kèm
+  const handleToggleCoverAttachment = (att: AttachmentItem) => {
+    updateCurrentCard((c) => {
+      const willBeCover = c.coverUrl !== att.url;
+      const atts = (c.attachments || []).map((a) => ({
+        ...a,
+        isCover: a.id === att.id ? willBeCover : false,
+      }));
+      return {
+        ...c,
+        attachments: atts,
+        coverUrl: willBeCover ? att.url : undefined,
+        coverColor: willBeCover ? undefined : c.coverColor,
+      };
+    });
+  };
+
+  // 8.4. Đặt màu bìa (Cover Color)
+  const handleSetCoverColor = (colorClass: string) => {
+    if (selectedCard) {
+      logCardActivity(selectedCard.card.id, "đã thay đổi màu bìa thẻ");
+    }
+    updateCurrentCard((c) => ({
+      ...c,
+      coverColor: c.coverColor === colorClass ? undefined : colorClass,
+      coverUrl: undefined,
+    }));
+  };
+
+  // 8.5. Đặt ảnh bìa (Cover Image URL)
+  const handleSetCoverUrl = (url: string) => {
+    updateCurrentCard((c) => ({
+      ...c,
+      coverUrl: c.coverUrl === url ? undefined : url,
+      coverColor: undefined,
+    }));
+  };
+
+  // 8.6. Xóa toàn bộ ảnh/màu bìa
+  const handleRemoveCover = () => {
+    updateCurrentCard((c) => ({
+      ...c,
+      coverUrl: undefined,
+      coverColor: undefined,
+    }));
+  };
+
+  // 9. Lưu trữ Thẻ (Đánh dấu isArchived = true)
+  const handleArchiveCard = (targetCardId?: string) => {
+    const cardId = targetCardId || selectedCard?.card.id;
+    if (!cardId) return;
     setBoard((prev) => ({
       ...prev,
       lists: prev.lists.map((l) => ({
         ...l,
-        cards: l.cards.filter((c) => c.id !== cardId),
+        cards: l.cards.map((c) => (c.id === cardId ? { ...c, isArchived: true } : c)),
       })),
     }));
-    setSelectedCard(null);
+    if (selectedCard && selectedCard.card.id === cardId) {
+      setSelectedCard(null);
+    }
+  };
+
+  // 9.1. Khôi phục thẻ từ thùng lưu trữ
+  const handleRestoreCard = (cardId: string) => {
+    setBoard((prev) => ({
+      ...prev,
+      lists: prev.lists.map((l) => ({
+        ...l,
+        cards: l.cards.map((c) => (c.id === cardId ? { ...c, isArchived: false } : c)),
+      })),
+    }));
+  };
+
+  // 9.2. Mở Modal xác nhận xóa vĩnh viễn
+  const handleOpenDeleteConfirm = (cardId: string) => {
+    setCardToDeleteId(cardId);
+  };
+
+  // 9.2.1. Xác nhận xóa thẻ vĩnh viễn khỏi hệ thống
+  const handleConfirmDeleteCard = () => {
+    if (!cardToDeleteId) return;
+    const targetId = cardToDeleteId;
+    setBoard((prev) => ({
+      ...prev,
+      lists: prev.lists.map((l) => ({
+        ...l,
+        cards: l.cards.filter((c) => c.id !== targetId),
+      })),
+    }));
+    if (selectedCard?.card.id === targetId) {
+      setSelectedCard(null);
+    }
+    setCardToDeleteId(null);
+  };
+
+  // 9.3. Lưu trữ Danh sách (Cột)
+  const handleArchiveList = (listId: string) => {
+    setBoard((prev) => ({
+      ...prev,
+      lists: prev.lists.map((l) => (l.id === listId ? { ...l, isArchived: true } : l)),
+    }));
+  };
+
+  // 9.4. Khôi phục Danh sách (Cột)
+  const handleRestoreList = (listId: string) => {
+    setBoard((prev) => ({
+      ...prev,
+      lists: prev.lists.map((l) => (l.id === listId ? { ...l, isArchived: false } : l)),
+    }));
+  };
+
+  // 9.5. Sắp xếp các thẻ trong Danh sách
+  const handleSortList = (listId: string, sortType: "title" | "date") => {
+    setBoard((prev) => ({
+      ...prev,
+      lists: prev.lists.map((l) => {
+        if (l.id !== listId) return l;
+        const sortedCards = [...l.cards].sort((a, b) => {
+          if (sortType === "title") {
+            return a.title.localeCompare(b.title);
+          } else {
+            return (a.dueDate || "9999").localeCompare(b.dueDate || "9999");
+          }
+        });
+        return { ...l, cards: sortedCards };
+      }),
+    }));
   };
 
   // --- FILTER STATES (Trello Style Filter) ---
+  // --- ARCHIVE & DRAWER STATES (Trello Archived Items) ---
+  const [isArchivedDrawerOpen, setIsArchivedDrawerOpen] = useState(false);
+  const [archivedTab, setArchivedTab] = useState<"cards" | "lists">("cards");
+  const [archivedSearchQuery, setArchivedSearchQuery] = useState("");
+  // State quản lý Modal xác nhận xóa vĩnh viễn (Custom Web Modal)
+  const [cardToDeleteId, setCardToDeleteId] = useState<string | null>(null);
+
+  // --- SHARE & INVITE MEMBER STATES ---
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [activeMemberDropdownId, setActiveMemberDropdownId] = useState<string | null>(null);
+  const [inviteInput, setInviteInput] = useState("");
+  const [inviteRole, setInviteRole] = useState<"ADMIN" | "MEMBER" | "OBSERVER">("MEMBER");
+  const [isCopiedInviteLink, setIsCopiedInviteLink] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [inviteSuccessMsg, setInviteSuccessMsg] = useState<string | null>(null);
+
+  // Danh sách thành viên trong Board
+  const [boardMembersList, setBoardMembersList] = useState<BoardMemberItem[]>([
+    {
+      id: "u_1",
+      name: "Nguyễn Văn Bình (Bạn)",
+      email: "binh@trello.work",
+      initials: "B",
+      avatarBg: "bg-blue-700",
+      role: "ADMIN",
+      status: "ACTIVE",
+    },
+    {
+      id: "u_2",
+      name: "Trần Thị Nga",
+      email: "nga.tran@company.com",
+      initials: "N",
+      avatarBg: "bg-emerald-600",
+      role: "MEMBER",
+      status: "ACTIVE",
+    },
+    {
+      id: "u_3",
+      name: "Lê Tuấn Anh",
+      email: "tuananh.le@tech.io",
+      initials: "T",
+      avatarBg: "bg-purple-600",
+      role: "MEMBER",
+      status: "ACTIVE",
+    },
+  ]);
+
+  // Handler mời thành viên mới vào Board
+  const handleInviteMember = (e: React.FormEvent) => {
+    e.preventDefault();
+    setInviteError(null);
+    setInviteSuccessMsg(null);
+
+    const emailOrName = inviteInput.trim();
+    if (!emailOrName) {
+      setInviteError("Vui lòng nhập địa chỉ email hoặc tên người dùng");
+      return;
+    }
+
+    if (boardMembersList.some((m) => m.email.toLowerCase() === emailOrName.toLowerCase())) {
+      setInviteError("Thành viên này đã có trong bảng làm việc rồi!");
+      return;
+    }
+
+    const namePart = emailOrName.split("@")[0];
+    const initials = namePart.charAt(0).toUpperCase();
+    const colors = ["bg-amber-600", "bg-rose-600", "bg-indigo-600", "bg-teal-600", "bg-cyan-600"];
+    const randomBg = colors[Math.floor(Math.random() * colors.length)];
+
+    const newMember: BoardMemberItem = {
+      id: "u_" + Date.now(),
+      name: emailOrName.includes("@") ? namePart : emailOrName,
+      email: emailOrName.includes("@") ? emailOrName : namePart.toLowerCase() + "@workspace.io",
+      initials,
+      avatarBg: randomBg,
+      role: inviteRole,
+      status: "PENDING",
+    };
+
+    setBoardMembersList([...boardMembersList, newMember]);
+    setInviteInput("");
+    setInviteSuccessMsg("Đã gửi thư mời đến " + newMember.email + ". Đang chờ người dùng mở email xác nhận.");
+    setTimeout(() => setInviteSuccessMsg(null), 3000);
+  };
+
+  // Handler đổi quyền thành viên
+  const handleChangeMemberRole = (memberId: string, newRole: "ADMIN" | "MEMBER" | "OBSERVER") => {
+    setBoardMembersList((prev) =>
+      prev.map((m) => (m.id === memberId ? { ...m, role: newRole } : m))
+    );
+  };
+
+  // Handler xóa thành viên hoặc hủy lời mời
+  const handleRemoveMemberFromBoard = (memberId: string) => {
+    if (boardMembersList.length <= 1) {
+      alert("Bảng phải có ít nhất một Quản trị viên!");
+      return;
+    }
+    setBoardMembersList((prev) => prev.filter((m) => m.id !== memberId));
+  };
+
+  // Handler sao chép liên kết mời
+  const handleCopyInviteLink = () => {
+    const inviteUrl = typeof window !== "undefined" ? window.location.origin + "/invite/board/" + boardId + "?token=tk_" + Date.now() : "";
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(inviteUrl);
+      setIsCopiedInviteLink(true);
+      setTimeout(() => setIsCopiedInviteLink(false), 2500);
+    }
+  };
+
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const filterContainerRef = useRef<HTMLDivElement | null>(null);
   const [filterKeyword, setFilterKeyword] = useState("");
@@ -991,13 +1714,20 @@ function BoardContent() {
     );
   };
 
-  // Filtered Lists & Cards
+  // Filtered Lists & Cards (Chỉ lấy các cột và thẻ chưa lưu trữ isArchived !== true)
   const displayLists = useMemo(() => {
+    const activeLists = board.lists
+      .filter((l) => !l.isArchived)
+      .map((l) => ({
+        ...l,
+        cards: l.cards.filter((c) => !c.isArchived),
+      }));
+
     if (activeFiltersCount === 0) {
-      return board.lists;
+      return activeLists;
     }
 
-    return board.lists.map((l) => ({
+    return activeLists.map((l) => ({
       ...l,
       cards: l.cards.filter((c) => {
         // Keyword match
@@ -1408,16 +2138,25 @@ function BoardContent() {
           <span className="text-white/30">|</span>
 
           {/* Board Members */}
-          <div className="flex items-center -space-x-1.5">
-            <div className="w-7 h-7 rounded-full bg-blue-700 text-white font-bold text-xs flex items-center justify-center border-2 border-slate-900 shadow-xs">
-              B
-            </div>
-            <div className="w-7 h-7 rounded-full bg-emerald-600 text-white font-bold text-xs flex items-center justify-center border-2 border-slate-900 shadow-xs">
-              N
-            </div>
-            <div className="w-7 h-7 rounded-full bg-purple-600 text-white font-bold text-xs flex items-center justify-center border-2 border-slate-900 shadow-xs">
-              T
-            </div>
+          <div
+            onClick={() => setIsShareModalOpen(true)}
+            className="flex items-center -space-x-1.5 cursor-pointer hover:opacity-90 transition-opacity"
+            title="Quản lý thành viên trong bảng"
+          >
+            {boardMembersList.slice(0, 4).map((m) => (
+              <div
+                key={m.id}
+                className={"w-7 h-7 rounded-full " + m.avatarBg + " text-white font-bold text-xs flex items-center justify-center border-2 border-slate-900 shadow-xs"}
+                title={m.name + " (" + m.role + ")"}
+              >
+                {m.initials}
+              </div>
+            ))}
+            {boardMembersList.length > 4 && (
+              <div className="w-7 h-7 rounded-full bg-slate-700 text-white font-bold text-[10px] flex items-center justify-center border-2 border-slate-900 shadow-xs">
+                +{boardMembersList.length - 4}
+              </div>
+            )}
           </div>
         </div>
 
@@ -1901,7 +2640,22 @@ function BoardContent() {
             )}
           </div>
 
-          <button className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-[#0c66e4] hover:bg-blue-50 rounded-md text-xs font-bold transition-all shadow-sm cursor-pointer">
+          {/* Nút Thùng lưu trữ (Mục đã lưu trữ) */}
+          <button
+            onClick={() => setIsArchivedDrawerOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-white/20 hover:bg-white/30 text-white rounded-md text-xs font-semibold transition-all backdrop-blur-xs cursor-pointer border border-white/20 shadow-xs"
+            title="Xem các mục đã lưu trữ"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+            </svg>
+            <span>Mục đã lưu trữ</span>
+          </button>
+
+          <button
+            onClick={() => setIsShareModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-[#0c66e4] hover:bg-blue-50 rounded-md text-xs font-bold transition-all shadow-sm cursor-pointer"
+          >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
             </svg>
@@ -1972,12 +2726,16 @@ function BoardContent() {
                 key={list.id}
                 list={list}
                 onSelectCard={(c, lt) => setSelectedCard({ card: c, listTitle: lt })}
+                onToggleDueDate={handleToggleDueDateCard}
+                onQuickEdit={handleOpenQuickEdit}
                 addingCardListId={addingCardListId}
                 setAddingCardListId={setAddingCardListId}
                 newCardTitle={newCardTitle}
                 setNewCardTitle={setNewCardTitle}
                 onAddCard={handleAddCard}
                 activeCardHeight={activeCardHeight}
+                onArchiveList={handleArchiveList}
+                onSortList={handleSortList}
               />
             ))}
           </SortableContext>
@@ -2102,6 +2860,827 @@ function BoardContent() {
       </DndContext>
       )}
 
+            {/* 8. QUICK CARD EDITOR OVERLAY (CHUẨN TRELLO CHÍNH XÁC THEO HÌNH ẢNH MẪU) */}
+      {quickEditCard && (() => {
+        const dueInfo = quickEditCard.card.dueDate
+          ? getDueDateStatus(quickEditCard.card.dueDate, quickEditCard.card.isDueComplete)
+          : null;
+
+        const quickActions = [
+          {
+            id: "open",
+            label: "Mở Thẻ",
+            icon: (
+              <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+              </svg>
+            ),
+            onClick: handleQuickOpenFullCard,
+          },
+          {
+            id: "labels",
+            label: "Chỉnh sửa nhãn",
+            icon: (
+              <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+              </svg>
+            ),
+            onClick: () => {
+              setSelectedCard({ card: quickEditCard.card, listTitle: quickEditCard.listTitle });
+              setCardModalMenu("labels");
+              setQuickEditCard(null);
+            },
+          },
+          {
+            id: "members",
+            label: "Thay đổi thành viên",
+            icon: (
+              <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+            ),
+            onClick: () => {
+              setSelectedCard({ card: quickEditCard.card, listTitle: quickEditCard.listTitle });
+              setCardModalMenu("members");
+              setQuickEditCard(null);
+            },
+          },
+          {
+            id: "cover",
+            label: "Thay đổi bìa",
+            icon: (
+              <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            ),
+            onClick: () => {
+              setSelectedCard({ card: quickEditCard.card, listTitle: quickEditCard.listTitle });
+              setCardModalMenu("cover");
+              setQuickEditCard(null);
+            },
+          },
+          {
+            id: "dates",
+            label: "Chỉnh sửa ngày",
+            icon: (
+              <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            ),
+            onClick: () => {
+              setSelectedCard({ card: quickEditCard.card, listTitle: quickEditCard.listTitle });
+              setCardModalMenu("dueDate");
+              setQuickEditCard(null);
+            },
+          },
+          {
+            id: "focus",
+            label: "Lên lịch trình cho thời gian tập trung",
+            icon: (
+              <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 100-6 3 3 0 000 6z" />
+              </svg>
+            ),
+            onClick: handleQuickOpenFullCard,
+          },
+          {
+            id: "move",
+            label: "Di chuyển",
+            icon: (
+              <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+              </svg>
+            ),
+            onClick: handleQuickOpenFullCard,
+          },
+          {
+            id: "jira",
+            label: "Tạo hạng mục công việc Jira",
+            icon: (
+              <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            ),
+            onClick: handleQuickOpenFullCard,
+          },
+          {
+            id: "copy",
+            label: "Sao chép thẻ",
+            icon: (
+              <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+            ),
+            onClick: () => {
+              // Nhân bản thẻ
+              const cardToCopy = quickEditCard.card;
+              const newCard: CardItem = {
+                ...cardToCopy,
+                id: "c_" + Date.now(),
+                title: cardToCopy.title + " (Bản sao)",
+              };
+              setBoard((prev) => ({
+                ...prev,
+                lists: prev.lists.map((l) =>
+                  l.title === quickEditCard.listTitle ? { ...l, cards: [...l.cards, newCard] } : l
+                ),
+              }));
+              setQuickEditCard(null);
+            },
+          },
+          {
+            id: "copyLink",
+            label: "Sao chép liên kết",
+            icon: (
+              <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+              </svg>
+            ),
+            onClick: () => {
+              if (navigator.clipboard) {
+                navigator.clipboard.writeText(window.location.href + "#card=" + quickEditCard.card.id);
+              }
+              setQuickEditCard(null);
+            },
+          },
+          {
+            id: "archive",
+            label: "Lưu trữ",
+            icon: (
+              <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+              </svg>
+            ),
+            onClick: handleQuickArchiveCard,
+          },
+        ];
+
+        return (
+          <div
+            onClick={() => setQuickEditCard(null)}
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-2xs flex items-start justify-start animate-in fade-in duration-100 overflow-y-auto"
+          >
+            {/* Popover Container đặt chính xác vị trí thẻ */}
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                position: "fixed",
+                top: Math.max(16, Math.min(window.innerHeight - 340, quickEditCard.rect.top)),
+                left: Math.max(16, quickEditCard.rect.left),
+                width: Math.max(300, quickEditCard.rect.width + 36),
+              }}
+              className="flex items-start gap-2.5 animate-in zoom-in-95 duration-150 select-none z-50"
+            >
+              {/* CỘT 1: THẺ SOẠN THẢO TRỰC TIẾP + NÚT LƯU */}
+              <div className="flex-1 flex flex-col gap-2.5">
+                {/* Thẻ mô phỏng chính xác thẻ hiện tại với Textarea */}
+                <div className="bg-white rounded-lg shadow-2xl border border-slate-200 overflow-hidden text-slate-800">
+                  {/* Ảnh bìa hoặc màu bìa nếu có */}
+                  {quickEditCard.card.coverUrl ? (
+                    <div className="w-full h-32 bg-slate-100 overflow-hidden relative">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={quickEditCard.card.coverUrl}
+                        alt="cover"
+                        className="w-full h-full object-cover pointer-events-none"
+                      />
+                    </div>
+                  ) : quickEditCard.card.coverColor ? (
+                    <div className={`w-full h-8 ${quickEditCard.card.coverColor}`} />
+                  ) : null}
+
+                  <div className="p-3">
+                    {/* Nhãn thẻ (Labels) */}
+                    {quickEditCard.card.labels && quickEditCard.card.labels.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mb-2">
+                        {quickEditCard.card.labels.map((lb) => (
+                          <span
+                            key={lb.id}
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${lb.color}`}
+                          >
+                            {lb.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Textarea nhập tiêu đề trực tiếp (tự động co giãn theo nội dung, không có thanh cuộn thô) */}
+                    <textarea
+                      autoFocus
+                      rows={3}
+                      value={quickEditTitle}
+                      onChange={(e) => {
+                        setQuickEditTitle(e.target.value);
+                        e.target.style.height = "auto";
+                        e.target.style.height = e.target.scrollHeight + "px";
+                      }}
+                      onFocus={(e) => {
+                        // Di chuyển con trỏ xuống cuối văn bản
+                        const val = e.target.value;
+                        e.target.value = "";
+                        e.target.value = val;
+                        e.target.style.height = "auto";
+                        e.target.style.height = e.target.scrollHeight + "px";
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSaveQuickEditTitle();
+                        } else if (e.key === "Escape") {
+                          setQuickEditCard(null);
+                        }
+                      }}
+                      className="w-full text-sm font-medium text-slate-900 border-none outline-none resize-none bg-transparent p-0 leading-snug overflow-hidden block"
+                      style={{ minHeight: "60px" }}
+                      placeholder="Nhập tiêu đề thẻ..."
+                    />
+
+                    {/* Footer Badges (Ngày hết hạn, Checklist, Bình luận, Thành viên) */}
+                    <div className="mt-3 flex items-center justify-between text-slate-500 text-xs">
+                      <div className="flex items-center gap-2">
+                        {/* Hạn chót */}
+                        {quickEditCard.card.dueDate && dueInfo && (
+                          <span
+                            className={`flex items-center gap-1.5 px-2 py-0.5 rounded-sm text-xs font-medium ${dueInfo.badgeBg} ${dueInfo.badgeText}`}
+                          >
+                            <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span className="leading-tight">{quickEditCard.card.dueDate}</span>
+                          </span>
+                        )}
+
+                        {/* Checklist */}
+                        {quickEditCard.card.checklistTotal !== undefined && (
+                          <span className="flex items-center gap-1 font-medium text-slate-600">
+                            <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            {quickEditCard.card.checklistDone}/{quickEditCard.card.checklistTotal}
+                          </span>
+                        )}
+
+                        {/* Comments */}
+                        {quickEditCard.card.commentsCount ? (
+                          <span className="flex items-center gap-1 text-slate-500">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                            </svg>
+                            {quickEditCard.card.commentsCount}
+                          </span>
+                        ) : null}
+                      </div>
+
+                      {/* Thành viên */}
+                      {quickEditCard.card.members && quickEditCard.card.members.length > 0 && (
+                        <div className="flex items-center -space-x-1">
+                          {quickEditCard.card.members.map((m, idx) => (
+                            <span
+                              key={idx}
+                              className="w-5 h-5 rounded-full bg-[#0c66e4] text-white text-[10px] font-bold flex items-center justify-center border border-white"
+                            >
+                              {m}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* NÚT LƯU TIÊU ĐỀ (Chuẩn Trello: Nút xanh phẳng, bo góc nhẹ) */}
+                <div>
+                  <button
+                    type="button"
+                    onClick={handleSaveQuickEditTitle}
+                    className="px-4 py-2 bg-[#0c66e4] hover:bg-[#0055cc] text-white text-xs font-semibold rounded-md shadow-xs transition-colors cursor-pointer"
+                  >
+                    Lưu
+                  </button>
+                </div>
+              </div>
+
+              {/* CỘT 2: THANH MENU TÁC VỤ NHANH TRELLO (BO GÓC MỀM MẠI, NỀN BÁN TRONG SUỐT ĐEN NHƯ ẢNH MẪU) */}
+              <div className="flex flex-col gap-1.5 shrink-0 w-72 max-h-[85vh] overflow-y-auto no-scrollbar animate-in slide-in-from-left-2 duration-150">
+                {quickActions.map((action) => (
+                  <button
+                    key={action.id}
+                    type="button"
+                    onClick={action.onClick}
+                    className="w-full flex items-center gap-2.5 px-3 py-1.5 bg-[#000000b3] hover:bg-[#000000cc] text-white text-xs font-medium rounded-md backdrop-blur-md transition-colors cursor-pointer shadow-xs text-left"
+                  >
+                    <span className="shrink-0">{action.icon}</span>
+                    <span className="whitespace-nowrap font-medium">{action.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* 7. SHARE & INVITE MEMBER MODAL (POPUP CHIA SẺ VÀ MỜI THÀNH VIÊN CHUẨN TRELLO) */}
+      {isShareModalOpen && (
+        <div
+          onClick={() => {
+            setIsShareModalOpen(false);
+            setInviteError(null);
+            setInviteSuccessMsg(null);
+          }}
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150 cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-xl bg-white rounded-2xl shadow-2xl border border-slate-200 p-6 text-slate-800 animate-in zoom-in-95 duration-150 cursor-default select-none flex flex-col transition-all relative overflow-visible"
+          >
+            {/* Header Modal */}
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-blue-100 text-[#0c66e4] flex items-center justify-center">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                  </svg>
+                </div>
+                <h3 className="font-bold text-base text-slate-900">Chia sẻ bảng làm việc</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsShareModalOpen(false);
+                  setInviteError(null);
+                  setInviteSuccessMsg(null);
+                }}
+                className="p-1 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-700 cursor-pointer transition-colors text-xs"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Error or Success notification */}
+            {inviteError && (
+              <div className="mb-3 p-2.5 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+                <svg className="w-4 h-4 shrink-0 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>{inviteError}</span>
+              </div>
+            )}
+            {inviteSuccessMsg && (
+              <div className="mb-3 p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs flex items-center gap-2">
+                <svg className="w-4 h-4 shrink-0 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                <span>{inviteSuccessMsg}</span>
+              </div>
+            )}
+
+            {/* Invite Form */}
+            <form onSubmit={handleInviteMember} className="mb-5">
+              <div className="flex gap-2 items-center">
+                <div className="flex-1">
+                  <TextField
+                    fullWidth
+                    size="small"
+                    placeholder="Địa chỉ email hoặc tên người dùng..."
+                    value={inviteInput}
+                    onChange={(e) => setInviteInput(e.target.value)}
+                    sx={{
+                      "& .MuiOutlinedInput-root": {
+                        fontSize: "0.8125rem",
+                        borderRadius: "8px",
+                      },
+                    }}
+                  />
+                </div>
+
+                <div className="relative w-36">
+                  <select
+                    value={inviteRole}
+                    onChange={(e) => setInviteRole(e.target.value as any)}
+                    className="w-full px-2.5 py-2 border border-slate-300 rounded-lg text-xs font-semibold outline-none bg-white text-slate-700 focus:border-[#0c66e4] appearance-none cursor-pointer"
+                  >
+                    <option value="MEMBER">Thành viên</option>
+                    <option value="ADMIN">Quản trị viên</option>
+                    <option value="OBSERVER">Chỉ xem</option>
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-[#0c66e4] hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors cursor-pointer shrink-0"
+                >
+                  Chia sẻ
+                </button>
+              </div>
+            </form>
+
+            {/* Quick Share with Invite Link */}
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/90 mb-5 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0 text-slate-600">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                  </svg>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-slate-800">Chia sẻ bằng liên kết</p>
+                  <p className="text-[11px] text-slate-500 truncate">Bất kỳ ai có liên kết này đều có thể tham gia bảng</p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleCopyInviteLink}
+                className={"px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all cursor-pointer shrink-0 flex items-center gap-1.5 " + (isCopiedInviteLink ? "bg-emerald-600 text-white border-emerald-600 shadow-xs" : "bg-white hover:bg-slate-100 text-slate-700 border-slate-300 shadow-2xs")}
+              >
+                {isCopiedInviteLink ? (
+                  <>
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Đã sao chép!
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                    </svg>
+                    Sao chép liên kết
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Current Members List */}
+            <div>
+              <div className="flex items-center justify-between mb-2.5">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Thành viên trong bảng ({boardMembersList.length})
+                </span>
+              </div>
+
+              <div className="space-y-2">
+                {boardMembersList.map((member) => {
+                  const roleConfig = {
+                    ADMIN: { label: "Quản trị viên", desc: "Xem, chỉnh sửa và quản lý toàn bộ thành viên trong bảng", badge: "bg-amber-100 text-amber-800" },
+                    MEMBER: { label: "Thành viên", desc: "Xem, tạo thẻ và chỉnh sửa thẻ trong bảng", badge: "bg-blue-50 text-blue-700" },
+                    OBSERVER: { label: "Chỉ xem", desc: "Chỉ xem nội dung, không thể thêm hoặc sửa thẻ", badge: "bg-slate-100 text-slate-600" },
+                  }[member.role];
+
+                  const isDropdownOpen = activeMemberDropdownId === member.id;
+
+                  const isPending = member.status === "PENDING";
+
+                  return (
+                    <div
+                      key={member.id}
+                      className={"flex items-center justify-between p-3 rounded-xl border shadow-2xs transition-all relative " + (isPending ? "bg-amber-50/40 border-amber-200/80" : "bg-white hover:bg-slate-50/80 border-slate-200/80")}
+                    >
+                      {/* Avatar & User Details */}
+                      <div className="flex items-center gap-3 min-w-0 pr-2">
+                        <div className={"w-9 h-9 rounded-full " + member.avatarBg + " text-white font-bold text-xs flex items-center justify-center shadow-xs shrink-0 relative"}>
+                          {member.initials}
+                          {isPending && (
+                            <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-amber-500 border-2 border-white rounded-full" title="Đang chờ phản hồi" />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-xs font-bold text-slate-900 truncate leading-snug">{member.name}</p>
+                            {isPending && (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200/90 shrink-0" title="Đang chờ người dùng mở email và nhấn chấp nhận lời mời">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                                Chờ xác nhận qua email
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-slate-500 truncate mt-0.5">{member.email}</p>
+                        </div>
+                      </div>
+
+                      {/* Role Selector Button & Remove */}
+                      <div className="flex items-center gap-2 shrink-0">
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() => setActiveMemberDropdownId(isDropdownOpen ? null : member.id)}
+                            className={"flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer " + (isDropdownOpen ? "bg-white border-[#0c66e4] text-[#0c66e4] ring-2 ring-blue-100" : "bg-slate-100/90 hover:bg-slate-200/80 text-slate-700 border-slate-200 shadow-2xs")}
+                          >
+                            <span>{roleConfig.label}</span>
+                            <svg className={"w-3.5 h-3.5 text-slate-500 transition-transform duration-150 " + (isDropdownOpen ? "rotate-180 text-[#0c66e4]" : "")} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </button>
+
+                          {/* Trello Style Role Popover Menu */}
+                          {isDropdownOpen && (
+                            <div
+                              onClick={(e) => e.stopPropagation()}
+                              className="absolute right-0 top-full mt-1.5 w-72 bg-white rounded-xl shadow-2xl border border-slate-200 p-2 z-50 text-slate-800 animate-in fade-in zoom-in-95 duration-100"
+                            >
+                              <div className="px-2 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 mb-1">
+                                Quyền hạn trên bảng
+                              </div>
+
+                              <div className="space-y-1">
+                                {/* Option 1: Thành viên */}
+                                <div
+                                  onClick={() => {
+                                    handleChangeMemberRole(member.id, "MEMBER");
+                                    setActiveMemberDropdownId(null);
+                                  }}
+                                  className={"p-2 rounded-lg cursor-pointer transition-colors flex items-start gap-2.5 " + (member.role === "MEMBER" ? "bg-blue-50/80 text-[#0c66e4]" : "hover:bg-slate-100 text-slate-700")}
+                                >
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center justify-between">
+                                      <span className="font-bold text-xs">Thành viên</span>
+                                      {member.role === "MEMBER" && <span className="font-bold text-xs">✓</span>}
+                                    </div>
+                                    <p className="text-[11px] text-slate-500 leading-normal mt-0.5">
+                                      Xem, tạo và chỉnh sửa thẻ trong bảng làm việc
+                                    </p>
+                                  </div>
+                                </div>
+
+                                {/* Option 2: Quản trị viên */}
+                                <div
+                                  onClick={() => {
+                                    handleChangeMemberRole(member.id, "ADMIN");
+                                    setActiveMemberDropdownId(null);
+                                  }}
+                                  className={"p-2 rounded-lg cursor-pointer transition-colors flex items-start gap-2.5 " + (member.role === "ADMIN" ? "bg-blue-50/80 text-[#0c66e4]" : "hover:bg-slate-100 text-slate-700")}
+                                >
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center justify-between">
+                                      <span className="font-bold text-xs">Quản trị viên</span>
+                                      {member.role === "ADMIN" && <span className="font-bold text-xs">✓</span>}
+                                    </div>
+                                    <p className="text-[11px] text-slate-500 leading-normal mt-0.5">
+                                      Xem, chỉnh sửa và quản lý mọi thành viên & cài đặt bảng
+                                    </p>
+                                  </div>
+                                </div>
+
+                                {/* Option 3: Chỉ xem */}
+                                <div
+                                  onClick={() => {
+                                    handleChangeMemberRole(member.id, "OBSERVER");
+                                    setActiveMemberDropdownId(null);
+                                  }}
+                                  className={"p-2 rounded-lg cursor-pointer transition-colors flex items-start gap-2.5 " + (member.role === "OBSERVER" ? "bg-blue-50/80 text-[#0c66e4]" : "hover:bg-slate-100 text-slate-700")}
+                                >
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center justify-between">
+                                      <span className="font-bold text-xs">Chỉ xem (Observer)</span>
+                                      {member.role === "OBSERVER" && <span className="font-bold text-xs">✓</span>}
+                                    </div>
+                                    <p className="text-[11px] text-slate-500 leading-normal mt-0.5">
+                                      Chỉ xem nội dung, không thể di chuyển hoặc thay đổi thẻ
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveMemberFromBoard(member.id)}
+                          className="w-7 h-7 flex items-center justify-center hover:bg-red-50 text-slate-400 hover:text-red-600 rounded-lg transition-colors cursor-pointer text-xs shrink-0"
+                          title={isPending ? "Hủy lời mời này" : "Rời khỏi / Xóa thành viên"}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 6. MODAL XÁC NHẬN XÓA THẺ VĨNH VIỄN (CUSTOM POPUP WEB CHUẨN TRELLO) */}
+      {cardToDeleteId && (
+        <div
+          onClick={() => setCardToDeleteId(null)}
+          className="fixed inset-0 z-60 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150 cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm bg-white rounded-2xl shadow-2xl border border-slate-200 p-5 text-slate-800 animate-in zoom-in-95 duration-150 cursor-default select-none"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2 text-red-600">
+                <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center">
+                  <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </div>
+                <h4 className="font-bold text-sm text-slate-900">Xóa thẻ vĩnh viễn?</h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCardToDeleteId(null)}
+                className="p-1 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-700 cursor-pointer transition-colors text-xs"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Description */}
+            <p className="text-xs text-slate-600 leading-relaxed mb-4">
+              Tất cả các hành động liên quan đến thẻ này sẽ bị xóa vĩnh viễn khỏi hệ thống. Bạn <strong className="text-red-600 font-semibold">không thể hoàn tác</strong> hành động này.
+            </p>
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setCardToDeleteId(null)}
+                className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteCard}
+                className="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-lg shadow-sm shadow-red-500/30 transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                Xóa vĩnh viễn
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5. ARCHIVED ITEMS DRAWER (THÙNG LƯU TRỮ CHUẨN TRELLO) */}
+      {isArchivedDrawerOpen && (
+        <div
+          onClick={() => setIsArchivedDrawerOpen(false)}
+          className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex justify-end animate-in fade-in duration-150 cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm sm:max-w-md bg-white text-slate-800 h-full shadow-2xl flex flex-col p-5 border-l border-slate-200 animate-in slide-in-from-right duration-200 cursor-default select-none"
+          >
+            {/* Drawer Header */}
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-200">
+              <div className="flex items-center gap-2">
+                <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                </svg>
+                <h3 className="font-bold text-base text-slate-900">Mục đã lưu trữ</h3>
+              </div>
+              <button
+                onClick={() => setIsArchivedDrawerOpen(false)}
+                className="p-1 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-700 cursor-pointer transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Search within Archive */}
+            <div className="mb-4">
+              <TextField
+                fullWidth
+                size="small"
+                placeholder="Tìm kiếm mục đã lưu trữ..."
+                value={archivedSearchQuery}
+                onChange={(e) => setArchivedSearchQuery(e.target.value)}
+                sx={{
+                  "& .MuiOutlinedInput-root": {
+                    borderRadius: "8px",
+                    fontSize: "0.8125rem",
+                  },
+                }}
+              />
+            </div>
+
+            {/* Toggle Tabs: Thẻ vs Danh sách */}
+            <div className="flex gap-2 mb-4 bg-slate-100 p-1 rounded-lg">
+              <button
+                onClick={() => setArchivedTab("cards")}
+                className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                  archivedTab === "cards" ? "bg-white text-[#0c66e4] shadow-xs" : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                Thẻ đã lưu trữ
+              </button>
+              <button
+                onClick={() => setArchivedTab("lists")}
+                className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                  archivedTab === "lists" ? "bg-white text-[#0c66e4] shadow-xs" : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                Danh sách đã lưu trữ
+              </button>
+            </div>
+
+            {/* Items List Content */}
+            <div className="flex-1 overflow-y-auto space-y-2.5 pr-1 no-scrollbar">
+              {archivedTab === "cards" ? (() => {
+                const allArchivedCards = board.lists.flatMap((l) =>
+                  l.cards
+                    .filter((c) => c.isArchived)
+                    .map((c) => ({ card: c, listTitle: l.title }))
+                ).filter((item) =>
+                  item.card.title.toLowerCase().includes(archivedSearchQuery.toLowerCase())
+                );
+
+                if (allArchivedCards.length === 0) {
+                  return (
+                    <div className="py-12 text-center text-slate-400 text-xs italic">
+                      Không có thẻ nào trong thùng lưu trữ
+                    </div>
+                  );
+                }
+
+                return allArchivedCards.map(({ card, listTitle }) => (
+                  <div
+                    key={card.id}
+                    className="p-3 bg-slate-50 rounded-xl border border-slate-200 hover:border-slate-300 transition-all flex flex-col gap-2 group"
+                  >
+                    <div
+                      onClick={() => setSelectedCard({ card, listTitle })}
+                      className="cursor-pointer"
+                      title="Nhấp để mở xem chi tiết thẻ này"
+                    >
+                      <h4 className="font-semibold text-xs text-slate-800 leading-snug group-hover:text-[#0c66e4] transition-colors">{card.title}</h4>
+                      <p className="text-[11px] text-slate-500 mt-0.5">Danh sách gốc: <span className="font-medium text-slate-700">{listTitle}</span></p>
+                    </div>
+                    <div className="flex items-center gap-3 pt-1 border-t border-slate-200 text-xs font-medium">
+                      <button
+                        onClick={() => handleRestoreCard(card.id)}
+                        className="text-[#0c66e4] hover:underline cursor-pointer flex items-center gap-1"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                        </svg>
+                        Khôi phục về bảng
+                      </button>
+                      <button
+                        onClick={() => handleOpenDeleteConfirm(card.id)}
+                        className="text-red-600 hover:underline cursor-pointer flex items-center gap-1 ml-auto"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                        Xóa vĩnh viễn
+                      </button>
+                    </div>
+                  </div>
+                ));
+              })() : (() => {
+                const archivedLists = board.lists
+                  .filter((l) => l.isArchived)
+                  .filter((l) => l.title.toLowerCase().includes(archivedSearchQuery.toLowerCase()));
+
+                if (archivedLists.length === 0) {
+                  return (
+                    <div className="py-12 text-center text-slate-400 text-xs italic">
+                      Không có danh sách nào trong thùng lưu trữ
+                    </div>
+                  );
+                }
+
+                return archivedLists.map((l) => (
+                  <div
+                    key={l.id}
+                    className="p-3 bg-slate-50 rounded-xl border border-slate-200 hover:border-slate-300 transition-all flex items-center justify-between"
+                  >
+                    <div>
+                      <h4 className="font-semibold text-xs text-slate-800">{l.title}</h4>
+                      <p className="text-[11px] text-slate-500 mt-0.5">{l.cards.length} thẻ bên trong</p>
+                    </div>
+                    <button
+                      onClick={() => handleRestoreList(l.id)}
+                      className="px-2.5 py-1.5 bg-[#0c66e4] hover:bg-blue-700 text-white text-xs font-semibold rounded-md shadow-xs transition-colors cursor-pointer flex items-center gap-1"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                      </svg>
+                      Đưa lại bảng
+                    </button>
+                  </div>
+                ));
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 4. TRELLO CARD DETAIL MODAL */}
       {selectedCard && (
         <div
@@ -2110,8 +3689,39 @@ function BoardContent() {
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="bg-[#f1f2f4] rounded-2xl max-w-5xl w-full min-h-[500px] sm:min-h-[560px] max-h-[95vh] overflow-y-auto no-scrollbar p-6 sm:p-7 pb-10 relative shadow-2xl border border-slate-300 text-slate-800 cursor-default"
+            className="bg-[#f1f2f4] rounded-2xl max-w-5xl w-full min-h-[500px] sm:min-h-[560px] max-h-[95vh] overflow-y-auto no-scrollbar relative shadow-2xl border border-slate-300 text-slate-800 cursor-default overflow-hidden"
           >
+            {/* Modal Cover Image / Color Header Banner */}
+            {selectedCard.card.coverUrl ? (
+              <div className="w-full h-44 sm:h-52 bg-slate-800 relative group overflow-hidden">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={selectedCard.card.coverUrl}
+                  alt="cover"
+                  className="w-full h-full object-cover"
+                />
+                <button
+                  onClick={handleRemoveCover}
+                  className="absolute bottom-3 right-3 px-3 py-1 bg-black/60 hover:bg-black/80 text-white text-xs font-semibold rounded-md backdrop-blur-xs flex items-center gap-1.5 transition-all opacity-0 group-hover:opacity-100 cursor-pointer"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  Gỡ ảnh bìa
+                </button>
+              </div>
+            ) : selectedCard.card.coverColor ? (
+              <div className={`w-full h-24 sm:h-28 ${selectedCard.card.coverColor} relative group flex items-end justify-end p-3`}>
+                <button
+                  onClick={handleRemoveCover}
+                  className="px-3 py-1 bg-black/50 hover:bg-black/70 text-white text-xs font-semibold rounded-md backdrop-blur-xs flex items-center gap-1.5 transition-all opacity-0 group-hover:opacity-100 cursor-pointer"
+                >
+                  Gỡ màu bìa
+                </button>
+              </div>
+            ) : null}
+
+            <div className="p-6 sm:p-7 pb-10">
             {/* Close Button */}
             <button
               onClick={() => setSelectedCard(null)}
@@ -2211,26 +3821,65 @@ function BoardContent() {
                     </div>
                   </div>
 
-                  {selectedCard.card.dueDate && (
-                    <div>
-                      <h5 className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
-                        Ngày hết hạn
-                      </h5>
-                      <div className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 px-2.5 py-1 rounded-md text-xs font-medium">
-                        <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span>{selectedCard.card.dueDate}</span>
-                        <button
-                          onClick={() => handleSetDueDate("")}
-                          title="Xóa ngày hết hạn"
-                          className="ml-1 text-slate-400 hover:text-red-500 cursor-pointer font-bold"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                  {selectedCard.card.dueDate && (() => {
+                    const modalDueInfo = getDueDateStatus(selectedCard.card.dueDate, selectedCard.card.isDueComplete);
+                    return (
+                      <div>
+                        <h5 className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                          Ngày hết hạn
+                        </h5>
+                        <div className="flex items-center gap-1.5">
+                          {/* Ô chọn ngày hết hạn chuẩn Trello Light Theme (Không có checkbox - Bấm vào để chọn lại thời gian) */}
+                          <div
+                            onClick={(e) => {
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              setMenuAnchorRect({
+                                top: rect.top,
+                                left: rect.left,
+                                right: rect.right,
+                                bottom: rect.bottom,
+                              });
+                              setCardModalMenu(cardModalMenu === "dueDate" ? null : "dueDate");
+                            }}
+                            className={"inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-[#091e420f] hover:bg-[#091e4214] text-[#172b4d] text-xs font-normal cursor-pointer transition-all select-none border border-transparent " + (cardModalMenu === "dueDate" ? "ring-2 ring-[#0c66e4] bg-white border-[#0c66e4] shadow-xs" : "")}
+                            title="Nhấn để chọn lại thời gian"
+                          >
+                            {/* Ngày giờ (Ví dụ: 9:00 14 thg 10) */}
+                            <span className="text-[13px] text-[#172b4d] font-normal leading-none">
+                              {selectedCard.card.dueDate}
+                            </span>
+
+                            {/* Badge trạng thái chuẩn Trello: Quá hạn, Sắp hết hạn */}
+                            {modalDueInfo.status === "overdue" ? (
+                              <span className="text-[11px] font-medium px-1.5 py-0.5 rounded bg-[#f8716833] text-[#ae2e24] leading-none">
+                                Quá hạn
+                              </span>
+                            ) : modalDueInfo.status === "dueSoon" ? (
+                              <span className="text-[11px] font-medium px-1.5 py-0.5 rounded bg-[#f5cd4740] text-[#974f0c] leading-none">
+                                Sắp hết hạn
+                              </span>
+                            ) : null}
+
+                            {/* Mũi tên trỏ xuống Chevron */}
+                            <svg className={"w-4 h-4 text-[#44546f] transition-transform duration-150 shrink-0 " + (cardModalMenu === "dueDate" ? "rotate-180 text-[#0c66e4]" : "")} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </div>
+
+                          {/* Nút Xóa Ngày (dấu X xám gọn gàng kế bên) */}
+                          <button
+                            type="button"
+                            onClick={() => handleSetDueDate("")}
+                            title="Xóa ngày hết hạn"
+                            className="p-1.5 hover:bg-[#091e420f] text-[#626f86] hover:text-[#172b4d] rounded-sm transition-colors cursor-pointer flex items-center justify-center"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Description (Rich Text Editor chuẩn Trello / CKEditor) */}
@@ -2709,83 +4358,282 @@ function BoardContent() {
                   </div>
                 </div>
 
-                {/* Activity & Comments */}
-                <div>
-                  <div className="flex items-center gap-2 mb-3 font-bold text-sm text-slate-800">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-                    </svg>
-                    Hoạt động & Bình luận
-                  </div>
+                {/* Attachments Section (Các tệp đính kèm) */}
+                {selectedCard.card.attachments && selectedCard.card.attachments.length > 0 && (
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2 font-bold text-sm text-slate-800">
+                        <svg className="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                        </svg>
+                        Các tệp đính kèm
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          setMenuAnchorRect({
+                            top: rect.top,
+                            left: rect.left,
+                            right: rect.right,
+                            bottom: rect.bottom,
+                          });
+                          setCardModalMenu("attachment");
+                        }}
+                        className="px-2.5 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-semibold rounded-md transition-colors cursor-pointer"
+                      >
+                        Thêm
+                      </button>
+                    </div>
 
-                  {/* New comment input */}
-                  <div className="flex gap-2.5 items-start mb-4">
-                    <span className="w-7 h-7 rounded-full bg-[#0c66e4] text-white text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
-                      B
-                    </span>
-                    <div className="flex-1 flex flex-col gap-2.5">
-                      <TextField
-                        fullWidth
-                        size="small"
-                        multiline
-                        rows={2}
-                        placeholder="Viết bình luận..."
-                        value={newCommentText}
-                        onChange={(e) => setNewCommentText(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-                            e.preventDefault();
-                            handleAddComment();
-                          }
-                        }}
-                        sx={{
-                          backgroundColor: "#ffffff",
-                          borderRadius: "4px",
-                          boxShadow: "0 1px 1px rgba(9, 30, 66, 0.25)",
-                          "& .MuiOutlinedInput-root": {
-                            borderRadius: "4px",
-                            fontSize: "0.8125rem",
-                            "& fieldset": { borderColor: "#cbd5e1" },
-                            "&.Mui-focused fieldset": { borderColor: "#0c66e4" },
-                          },
-                        }}
-                      />
-                      {newCommentText.trim() && (
-                        <div className="pt-0.5">
-                          <button
-                            onClick={handleAddComment}
-                            className="px-3 py-1.5 bg-[#0c66e4] hover:bg-blue-700 text-white text-xs font-semibold rounded-md shadow-xs transition-colors cursor-pointer"
-                          >
-                            Lưu bình luận
-                          </button>
-                        </div>
-                      )}
+                    <div className="space-y-2">
+                      {selectedCard.card.attachments.map((att) => {
+                        const isImage = att.url.match(/\.(jpeg|jpg|gif|png|webp)($|\?)/i) || att.url.includes("unsplash.com");
+                        return (
+                          <div key={att.id} className="flex gap-3 items-center bg-white p-2.5 rounded-xl border border-slate-200/80 hover:bg-slate-50 transition-colors group">
+                            {/* Thumbnail or File Icon */}
+                            <div className="w-16 h-12 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center shrink-0">
+                              {isImage ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={att.url} alt={att.name} className="w-full h-full object-cover" />
+                              ) : (
+                                <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                              )}
+                            </div>
+
+                            {/* Details */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <a
+                                  href={att.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs font-bold text-slate-900 hover:underline truncate"
+                                >
+                                  {att.name}
+                                </a>
+                                {selectedCard.card.coverUrl === att.url && (
+                                  <span className="text-[10px] bg-blue-100 text-[#0c66e4] font-semibold px-1.5 py-0.2 rounded">
+                                    Ảnh bìa
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[11px] text-slate-500 mt-0.5">
+                                Đã thêm {att.createdAt} {att.size ? `• ${att.size}` : ""}
+                              </p>
+                              <div className="flex items-center gap-3 mt-1 text-[11px] text-slate-600 font-medium">
+                                <a href={att.url} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                                  Xem
+                                </a>
+                                {isImage && (
+                                  <button
+                                    onClick={() => handleToggleCoverAttachment(att)}
+                                    className="hover:underline cursor-pointer"
+                                  >
+                                    {selectedCard.card.coverUrl === att.url ? "Gỡ ảnh bìa" : "Đặt làm ảnh bìa"}
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => handleDeleteAttachment(att.id)}
+                                  className="text-red-600 hover:underline cursor-pointer"
+                                >
+                                  Xóa
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Activity & Comments (HOẠT ĐỘNG & BÌNH LUẬN CHUẨN TRELLO LIGHT THEME) */}
+                <div>
+                  {/* Header với Tabs Lọc: Tất cả / Bình luận / Lịch sử hoạt động */}
+                  <div className="flex items-center justify-between mb-3 border-b border-slate-100 pb-2">
+                    <div className="flex items-center gap-2 font-bold text-sm text-slate-800">
+                      <svg className="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span>Hoạt động</span>
+                    </div>
+
+                    {/* Filter Tabs */}
+                    <div className="flex items-center gap-1 bg-[#091e420f] p-0.5 rounded-lg text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setActivityTab("all")}
+                        className={"px-2.5 py-1 rounded-md font-semibold transition-all cursor-pointer " + (activityTab === "all" ? "bg-white text-[#0c66e4] shadow-2xs" : "text-slate-600 hover:text-slate-900")}
+                      >
+                        Tất cả ({ (selectedCard.card.comments?.length || 0) + (selectedCard.card.activities?.length || 0) })
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActivityTab("comments")}
+                        className={"px-2.5 py-1 rounded-md font-semibold transition-all cursor-pointer " + (activityTab === "comments" ? "bg-white text-[#0c66e4] shadow-2xs" : "text-slate-600 hover:text-slate-900")}
+                      >
+                        Bình luận ({ selectedCard.card.comments?.length || 0 })
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActivityTab("history")}
+                        className={"px-2.5 py-1 rounded-md font-semibold transition-all cursor-pointer " + (activityTab === "history" ? "bg-white text-[#0c66e4] shadow-2xs" : "text-slate-600 hover:text-slate-900")}
+                      >
+                        Lịch sử ({ selectedCard.card.activities?.length || 0 })
+                      </button>
                     </div>
                   </div>
 
-                  {/* Comments list */}
-                  <div className="space-y-3">
-                    {(selectedCard.card.comments || []).map((cm) => (
-                      <div key={cm.id} className="flex gap-2.5 items-start">
-                        <span className="w-7 h-7 rounded-full bg-emerald-600 text-white text-xs font-bold flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
-                          {cm.author}
-                        </span>
-                        <div className="flex-1 bg-white p-2.5 rounded-xl border border-slate-200 shadow-xs">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs font-bold text-slate-800">
-                              Thành viên {cm.author}
-                            </span>
-                            <span className="text-[10px] text-slate-400 font-medium">
-                              {cm.createdAt}
-                            </span>
+                  {/* New comment input (chỉ hiển thị khi xem tab Tất cả hoặc tab Bình luận) */}
+                  {activityTab !== "history" && (
+                    <div className="flex gap-2.5 items-start mb-4">
+                      <span className="w-8 h-8 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center shrink-0 mt-0.5 shadow-2xs">
+                        B
+                      </span>
+                      <div className="flex-1 flex flex-col gap-2">
+                        <TextField
+                          fullWidth
+                          size="small"
+                          multiline
+                          rows={2}
+                          placeholder="Viết bình luận..."
+                          value={newCommentText}
+                          onChange={(e) => setNewCommentText(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                              e.preventDefault();
+                              handleAddComment();
+                            }
+                          }}
+                          sx={{
+                            backgroundColor: "#ffffff",
+                            borderRadius: "8px",
+                            "& .MuiOutlinedInput-root": {
+                              borderRadius: "8px",
+                              fontSize: "0.8125rem",
+                              "& fieldset": { borderColor: "#cbd5e1" },
+                              "&.Mui-focused fieldset": { borderColor: "#0c66e4" },
+                            },
+                          }}
+                        />
+                        {newCommentText.trim() && (
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={handleAddComment}
+                              className="px-3.5 py-1.5 bg-[#0c66e4] hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-xs transition-colors cursor-pointer"
+                            >
+                              Lưu bình luận
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setNewCommentText("")}
+                              className="px-2.5 py-1.5 text-xs text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                            >
+                              Hủy
+                            </button>
                           </div>
-                          <p className="text-xs text-slate-700 leading-relaxed break-words">
-                            {cm.text}
-                          </p>
-                        </div>
+                        )}
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  )}
+
+                  {/* Combined Timeline Feed */}
+                  {(() => {
+                    type FeedItem =
+                      | { type: "comment"; data: CommentItem; time: number }
+                      | { type: "activity"; data: ActivityItem; time: number };
+
+                    const feedList: FeedItem[] = [];
+
+                    if (activityTab === "all" || activityTab === "comments") {
+                      (selectedCard.card.comments || []).forEach((c) => {
+                        feedList.push({
+                          type: "comment",
+                          data: c,
+                          time: c.timestamp || 0,
+                        });
+                      });
+                    }
+
+                    if (activityTab === "all" || activityTab === "history") {
+                      (selectedCard.card.activities || []).forEach((a) => {
+                        feedList.push({
+                          type: "activity",
+                          data: a,
+                          time: a.timestamp || 0,
+                        });
+                      });
+                    }
+
+                    // Sắp xếp theo mốc thời gian mới nhất lên đầu
+                    feedList.sort((a, b) => b.time - a.time);
+
+                    if (feedList.length === 0) {
+                      return (
+                        <div className="py-6 text-center text-xs text-slate-400 italic">
+                          Chưa có hoạt động hoặc bình luận nào trên thẻ này
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="space-y-3">
+                        {feedList.map((item, idx) => {
+                          if (item.type === "comment") {
+                            const cm = item.data;
+                            return (
+                              <div key={"cm_" + cm.id + "_" + idx} className="flex gap-2.5 items-start">
+                                <span className={"w-7 h-7 rounded-full text-white text-xs font-bold flex items-center justify-center shrink-0 mt-0.5 shadow-2xs " + (cm.avatarBg || "bg-emerald-600")}>
+                                  {cm.author}
+                                </span>
+                                <div className="flex-1 bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
+                                  <div className="flex items-center justify-between mb-1.5">
+                                    <span className="text-xs font-bold text-slate-900">
+                                      {cm.authorName || "Thành viên " + cm.author}
+                                    </span>
+                                    <span className="text-[11px] text-slate-400 font-medium">
+                                      {cm.createdAt}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-slate-700 leading-relaxed break-words">
+                                    {cm.text}
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          } else {
+                            const act = item.data;
+                            return (
+                              <div key={"act_" + act.id + "_" + idx} className="flex gap-2.5 items-start">
+                                <span className={"w-7 h-7 rounded-full text-white text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5 shadow-2xs " + (act.avatarBg || "bg-blue-600")}>
+                                  {act.author}
+                                </span>
+                                <div className="flex-1 pt-0.5 text-xs text-slate-700 leading-snug">
+                                  <div className="flex items-baseline gap-1.5 flex-wrap">
+                                    <span className="font-bold text-slate-900">
+                                      {act.authorName || "Thành viên " + act.author}
+                                    </span>
+                                    <span>{act.actionText}</span>
+                                    {act.targetText && (
+                                      <span className="font-semibold text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded text-[11px] border border-slate-200">
+                                        {act.targetText}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="text-[11px] text-slate-400 block mt-0.5">
+                                    {act.createdAt}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          }
+                        })}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -2857,6 +4705,54 @@ function BoardContent() {
                       Việc cần làm
                     </button>
 
+                    {/* Đính kèm Button */}
+                    <button
+                      onClick={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        setMenuAnchorRect({
+                          top: rect.top,
+                          left: rect.left,
+                          right: rect.right,
+                          bottom: rect.bottom,
+                        });
+                        setCardModalMenu(cardModalMenu === "attachment" ? null : "attachment");
+                      }}
+                      className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
+                        cardModalMenu === "attachment"
+                          ? "bg-[#0c66e4] text-white"
+                          : "bg-slate-200 hover:bg-slate-300 text-slate-700"
+                      }`}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                      </svg>
+                      Đính kèm
+                    </button>
+
+                    {/* Ảnh bìa Button */}
+                    <button
+                      onClick={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        setMenuAnchorRect({
+                          top: rect.top,
+                          left: rect.left,
+                          right: rect.right,
+                          bottom: rect.bottom,
+                        });
+                        setCardModalMenu(cardModalMenu === "cover" ? null : "cover");
+                      }}
+                      className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
+                        cardModalMenu === "cover"
+                          ? "bg-[#0c66e4] text-white"
+                          : "bg-slate-200 hover:bg-slate-300 text-slate-700"
+                      }`}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      Ảnh bìa
+                    </button>
+
                     {/* Ngày hết hạn Button */}
                     <button
                       onClick={(e) => {
@@ -2889,13 +4785,23 @@ function BoardContent() {
                   </h5>
                   <div className="space-y-1.5">
                     <button
-                      onClick={handleArchiveCard}
+                      onClick={() => handleArchiveCard()}
+                      className="w-full flex items-center gap-2 px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                      </svg>
+                      Lưu trữ (Archive)
+                    </button>
+
+                    <button
+                      onClick={() => handleOpenDeleteConfirm(selectedCard.card.id)}
                       className="w-full flex items-center gap-2 px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 text-xs font-semibold rounded-lg transition-colors cursor-pointer shadow-xs"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                       </svg>
-                      Lưu trữ (Archive)
+                      Xóa vĩnh viễn (Delete)
                     </button>
                   </div>
                 </div>
@@ -2913,31 +4819,34 @@ function BoardContent() {
               >
                 <div
                   onClick={(e) => e.stopPropagation()}
-                  className="bg-white text-slate-800 rounded-2xl shadow-2xl border border-slate-200 animate-in zoom-in-95 duration-150 select-none overflow-hidden max-h-[88vh] flex flex-col"
+                  className="bg-white text-slate-800 rounded-2xl shadow-2xl border border-slate-200 animate-in zoom-in-95 duration-150 select-none overflow-hidden max-h-[90vh] flex flex-col transition-all"
                 >
-                  {/* --- SUBMENU 1: THÀNH VIÊN (CHUẨN TRELLO INTERFACE) --- */}
+                  {/* --- SUBMENU 1: THÀNH VIÊN TRONG THẺ (CHUẨN TRELLO LIGHT THEME VỚI 2 SECTION) --- */}
                   {cardModalMenu === "members" && (() => {
-                    const boardMembersList = [
+                    const boardMembers = [
                       { id: "B", name: "P.T. Bình", initials: "PB", color: "bg-[#00a3bf] text-white" },
                       { id: "N", name: "Minh Chu Dinh", initials: "MD", color: "bg-[#0c66e4] text-white" },
                       { id: "T", name: "Tuấn Trần", initials: "TT", color: "bg-[#e56910] text-white" },
                       { id: "A", name: "Anh Nguyễn", initials: "AN", color: "bg-[#1f845a] text-white" },
+                      { id: "P", name: "phamtuanbinh.189", initials: "P", color: "bg-slate-500 text-white" },
                     ];
 
-                    const filteredMembers = boardMembersList.filter((m) =>
-                      memberSearchQuery
-                        ? m.name.toLowerCase().includes(memberSearchQuery.toLowerCase()) ||
-                          m.initials.toLowerCase().includes(memberSearchQuery.toLowerCase()) ||
-                          m.id.toLowerCase().includes(memberSearchQuery.toLowerCase())
-                        : true
+                    const q = memberSearchQuery.trim().toLowerCase();
+                    const filtered = boardMembers.filter((m) =>
+                      q ? m.name.toLowerCase().includes(q) || m.initials.toLowerCase().includes(q) : true
                     );
 
+                    // Tách thành 2 nhóm: Thành viên của thẻ và Thành viên của bảng
+                    const cardMembers = filtered.filter((m) => selectedCard.card.members.includes(m.id));
+                    const otherBoardMembers = filtered.filter((m) => !selectedCard.card.members.includes(m.id));
+
                     return (
-                      <div className="w-80 sm:w-[320px] p-4 flex flex-col max-h-[85vh]">
+                      <div className="w-80 sm:w-[340px] p-4 flex flex-col bg-white text-slate-800 animate-in fade-in zoom-in-95 duration-100">
                         {/* Header */}
                         <div className="text-center font-bold text-sm text-slate-800 pb-2 mb-3 border-b border-slate-100 relative">
                           <span>Thành viên</span>
                           <button
+                            type="button"
                             onClick={() => {
                               setCardModalMenu(null);
                               setMenuAnchorRect(null);
@@ -2945,11 +4854,13 @@ function BoardContent() {
                             }}
                             className="absolute right-0 top-0 text-slate-400 hover:text-slate-700 p-1 rounded-full hover:bg-slate-100 cursor-pointer transition-colors"
                           >
-                            ✕
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
                           </button>
                         </div>
 
-                        {/* Search Input (Border xanh Trello khi focus) */}
+                        {/* Search Input (Border xanh Trello sáng đẹp) */}
                         <div className="mb-3">
                           <input
                             autoFocus
@@ -2957,57 +4868,406 @@ function BoardContent() {
                             placeholder="Tìm kiếm các thành viên"
                             value={memberSearchQuery}
                             onChange={(e) => setMemberSearchQuery(e.target.value)}
-                            className="w-full bg-slate-50 border border-slate-300 focus:border-[#0c66e4] focus:bg-white text-slate-800 text-xs px-3 py-2 rounded-lg outline-none placeholder-slate-400 transition-colors shadow-inner"
+                            className="w-full bg-white border-2 border-[#0c66e4] text-slate-800 text-xs px-3 py-2 rounded-lg outline-none placeholder-slate-400 shadow-2xs font-medium"
                           />
                         </div>
 
-                        {/* Section Header: Thành viên của bảng */}
-                        <div className="mb-1.5 text-[11px] font-bold text-slate-500">
-                          Thành viên của bảng
-                        </div>
-
-                        {/* Members List */}
-                        <div className="space-y-1 overflow-y-auto pr-1 no-scrollbar flex-1 max-h-72">
-                          {filteredMembers.length > 0 ? (
-                            filteredMembers.map((m) => {
-                              const isAdded = selectedCard.card.members.includes(m.id);
-                              return (
-                                <div
-                                  key={m.id}
-                                  onClick={() => handleToggleCardMember(m.id)}
-                                  className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors ${
-                                    isAdded
-                                      ? "bg-blue-50/80 hover:bg-blue-100/70"
-                                      : "hover:bg-slate-100"
-                                  }`}
-                                >
-                                  <div className="flex items-center gap-2.5 min-w-0">
-                                    <span
-                                      className={`w-8 h-8 rounded-full text-xs font-bold flex items-center justify-center shrink-0 shadow-xs ${m.color}`}
-                                    >
-                                      {m.initials}
-                                    </span>
-                                    <span className="text-xs font-semibold text-slate-800 truncate">
-                                      {m.name}
-                                    </span>
-                                  </div>
-                                  {isAdded ? (
+                        <div className="space-y-3 overflow-y-auto pr-1 no-scrollbar flex-1 max-h-[75vh]">
+                          {/* NHÓM 1: THÀNH VIÊN CỦA THẺ (NẾU CÓ) */}
+                          {cardMembers.length > 0 && (
+                            <div>
+                              <div className="mb-1 text-[11px] font-bold text-slate-600">
+                                Thành viên của thẻ
+                              </div>
+                              <div className="space-y-1">
+                                {cardMembers.map((m) => (
+                                  <div
+                                    key={m.id}
+                                    onClick={() => handleToggleCardMember(m.id)}
+                                    className="flex items-center justify-between p-2 rounded-xl bg-blue-50/80 hover:bg-blue-100/70 border border-blue-200/60 cursor-pointer transition-all group"
+                                  >
+                                    <div className="flex items-center gap-2.5 min-w-0">
+                                      <span
+                                        className={`w-8 h-8 rounded-full text-xs font-bold flex items-center justify-center shrink-0 shadow-2xs ${m.color}`}
+                                      >
+                                        {m.initials}
+                                      </span>
+                                      <span className="text-xs font-semibold text-slate-800 truncate">
+                                        {m.name}
+                                      </span>
+                                    </div>
                                     <span className="text-[#0c66e4] font-bold text-sm pr-1">
                                       ✓
                                     </span>
-                                  ) : (
-                                    <span className="text-slate-300 text-xs pr-1 group-hover:text-slate-400">
-                                      +
-                                    </span>
-                                  )}
-                                </div>
-                              );
-                            })
-                          ) : (
-                            <div className="py-4 text-center text-xs text-slate-400 italic">
-                              Không tìm thấy thành viên phù hợp
+                                  </div>
+                                ))}
+                              </div>
                             </div>
                           )}
+
+                          {/* NHÓM 2: THÀNH VIÊN CỦA BẢNG */}
+                          <div>
+                            <div className="mb-1 text-[11px] font-bold text-slate-600">
+                              Thành viên của bảng
+                            </div>
+                            <div className="space-y-1">
+                              {otherBoardMembers.length > 0 ? (
+                                otherBoardMembers.map((m) => (
+                                  <div
+                                    key={m.id}
+                                    onClick={() => handleToggleCardMember(m.id)}
+                                    className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-100 cursor-pointer transition-all group"
+                                  >
+                                    <div className="flex items-center gap-2.5 min-w-0">
+                                      <span
+                                        className={`w-8 h-8 rounded-full text-xs font-bold flex items-center justify-center shrink-0 shadow-2xs ${m.color}`}
+                                      >
+                                        {m.initials}
+                                      </span>
+                                      <span className="text-xs font-semibold text-slate-800 truncate group-hover:text-slate-900">
+                                        {m.name}
+                                      </span>
+                                    </div>
+                                    <span className="text-slate-400 font-bold text-sm pr-1 group-hover:text-slate-600">
+                                      +
+                                    </span>
+                                  </div>
+                                ))
+                              ) : cardMembers.length === 0 ? (
+                                <div className="py-4 text-center text-xs text-slate-400 italic">
+                                  Không tìm thấy thành viên phù hợp
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* POPUP 4: ĐÍNH KÈM (ATTACHMENT POPUP CHUẨN TRELLO LIGHT THEME) */}
+                  {cardModalMenu === "attachment" && (() => {
+                    const recentViewedItems = [
+                      {
+                        id: "r1",
+                        title: "agile_scrum_hethongbanhang",
+                        subtitle: "Trello Không gian ...",
+                        time: "Đã xem 2 ngày trước",
+                        type: "trello",
+                      },
+                      {
+                        id: "r2",
+                        title: "UI sửa danh mục",
+                        subtitle: "agile_scrum_heth...",
+                        time: "Đã xem 3 ngày trước",
+                        type: "card",
+                      },
+                      {
+                        id: "r3",
+                        title: "Công việc hàng ngày",
+                        subtitle: "Trello Không gian ...",
+                        time: "Đã xem 3 ngày trước",
+                        type: "trello",
+                      },
+                      {
+                        id: "r4",
+                        title: "[FE] - Xây dựng giao diện trang đăn...",
+                        subtitle: "traveloca",
+                        time: "Đã xem 3 ngày trước",
+                        type: "card",
+                      },
+                      {
+                        id: "r5",
+                        title: "Todo",
+                        subtitle: "Trello Không gian ...",
+                        time: "Đã xem 4 ngày trước",
+                        type: "trello",
+                      },
+                    ];
+
+                    return (
+                      <div className="w-[320px] sm:w-[340px] bg-white rounded-xl shadow-2xl border border-slate-200 p-4 text-slate-800 animate-in fade-in zoom-in-95 duration-100">
+                        {/* Header */}
+                        <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100 relative">
+                          <h4 className="font-bold text-sm text-slate-800 flex-1 text-center">
+                            Đính kèm
+                          </h4>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCardModalMenu(null);
+                              setMenuAnchorRect(null);
+                            }}
+                            className="absolute right-0 top-0 text-slate-400 hover:text-slate-700 p-1 rounded-full hover:bg-slate-100 cursor-pointer transition-colors"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+
+                        {/* Section 1: Upload from Computer */}
+                        <div className="mb-4">
+                          <label className="text-xs font-bold text-slate-800 block mb-1">
+                            Đính kèm tệp từ máy tính của bạn
+                          </label>
+                          <p className="text-[11px] text-slate-500 mb-2.5">
+                            Bạn cũng có thể kéo và thả tệp để tải chúng lên.
+                          </p>
+                          <label className="inline-flex items-center justify-center px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg border border-slate-200 transition-colors cursor-pointer shadow-2xs">
+                            Chọn tệp
+                            <input
+                              type="file"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  const url = URL.createObjectURL(file);
+                                  const sizeStr = (file.size / (1024 * 1024)).toFixed(1) + " MB";
+                                  handleAddAttachment(file.name, url, sizeStr);
+                                  setCardModalMenu(null);
+                                  setMenuAnchorRect(null);
+                                }
+                              }}
+                            />
+                          </label>
+                        </div>
+
+                        {/* Section 2: Search or Paste Link */}
+                        <div className="pt-3 border-t border-slate-100 space-y-3">
+                          <div>
+                            <label className="text-xs font-bold text-slate-800 block mb-1">
+                              Tìm kiếm hoặc dán liên kết <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              placeholder="Tìm các liên kết gần đây hoặc dán một..."
+                              value={attachmentLinkUrl}
+                              onChange={(e) => setAttachmentLinkUrl(e.target.value)}
+                              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs outline-none bg-white text-slate-800 placeholder-slate-400 focus:border-[#0c66e4] focus:ring-1 focus:ring-[#0c66e4] transition-all"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-xs font-bold text-slate-800 block mb-1">
+                              Văn bản hiển thị (không bắt buộc)
+                            </label>
+                            <input
+                              type="text"
+                              placeholder="Văn bản cần hiển thị"
+                              value={attachmentLinkName}
+                              onChange={(e) => setAttachmentLinkName(e.target.value)}
+                              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs outline-none bg-white text-slate-800 placeholder-slate-400 focus:border-[#0c66e4] focus:ring-1 focus:ring-[#0c66e4] transition-all"
+                            />
+                            <p className="text-[11px] text-slate-400 mt-1">
+                              Cung cấp tiêu đề hoặc mô tả cho liên kết này
+                            </p>
+                          </div>
+
+                          {/* Section 3: Recently Viewed (Đã xem gần đây) */}
+                          <div className="pt-2">
+                            <span className="text-xs font-bold text-slate-700 block mb-2">
+                              Đã xem gần đây
+                            </span>
+                            <div className="space-y-1 max-h-36 overflow-y-auto no-scrollbar">
+                              {recentViewedItems.map((item) => (
+                                <div
+                                  key={item.id}
+                                  onClick={() => {
+                                    setAttachmentLinkUrl("https://trello.work/item/" + item.id);
+                                    setAttachmentLinkName(item.title);
+                                  }}
+                                  className="flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-slate-100 cursor-pointer transition-colors group"
+                                >
+                                  <div className="w-5 h-5 rounded bg-blue-100 text-[#0c66e4] flex items-center justify-center shrink-0">
+                                    {item.type === "trello" ? (
+                                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                                        <rect x="3" y="3" width="7" height="18" rx="1.5" />
+                                        <rect x="14" y="3" width="7" height="12" rx="1.5" />
+                                      </svg>
+                                    ) : (
+                                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                      </svg>
+                                    )}
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-xs font-semibold text-slate-800 truncate group-hover:text-[#0c66e4]">
+                                      {item.title}
+                                    </p>
+                                    <p className="text-[10px] text-slate-400 truncate">
+                                      {item.subtitle} • {item.time}
+                                    </p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Footer action buttons: Hủy & Chèn */}
+                          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAttachmentLinkUrl("");
+                                setAttachmentLinkName("");
+                                setCardModalMenu(null);
+                                setMenuAnchorRect(null);
+                              }}
+                              className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                            >
+                              Hủy
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (attachmentLinkUrl.trim()) {
+                                  const name = attachmentLinkName.trim() || attachmentLinkUrl.trim();
+                                  handleAddAttachment(name, attachmentLinkUrl.trim());
+                                  setAttachmentLinkUrl("");
+                                  setAttachmentLinkName("");
+                                  setCardModalMenu(null);
+                                  setMenuAnchorRect(null);
+                                }
+                              }}
+                              disabled={!attachmentLinkUrl.trim()}
+                              className={"px-4 py-1.5 text-xs font-semibold rounded-lg shadow-xs transition-colors cursor-pointer " + (attachmentLinkUrl.trim() ? "bg-[#0c66e4] hover:bg-blue-700 text-white" : "bg-slate-200 text-slate-400 cursor-not-allowed")}
+                            >
+                              Chèn
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* POPUP 5: ẢNH BÌA & MÀU BÌA (COVER POPUP) */}
+                  {cardModalMenu === "cover" && (() => {
+                    const COVER_COLORS = [
+                      { id: "c1", name: "Xanh lá", class: "bg-[#4bce97]" },
+                      { id: "c2", name: "Vàng", class: "bg-[#f5cd47]" },
+                      { id: "c3", name: "Cam", class: "bg-[#fea362]" },
+                      { id: "c4", name: "Đỏ", class: "bg-[#f87168]" },
+                      { id: "c5", name: "Tím", class: "bg-[#9f8fef]" },
+                      { id: "c6", name: "Xanh dương", class: "bg-[#579dff]" },
+                      { id: "c7", name: "Xanh ngọc", class: "bg-[#6cc3e0]" },
+                      { id: "c8", name: "Hồng", class: "bg-[#e774bb]" },
+                      { id: "c9", name: "Đen xám", class: "bg-[#8590a2]" },
+                      { id: "c10", name: "Tối giản", class: "bg-[#172b4d]" },
+                    ];
+
+                    const COVER_PHOTOS = [
+                      "https://images.unsplash.com/photo-1519501025264-65ba15a82390?auto=format&fit=crop&w=600&q=80",
+                      "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=600&q=80",
+                      "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=600&q=80",
+                      "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80",
+                    ];
+
+                    return (
+                      <div className="w-[304px] sm:w-[320px] bg-white rounded-xl shadow-2xl border border-slate-200 p-3.5 text-slate-800">
+                        {/* Header */}
+                        <div className="flex items-center justify-between pb-2 mb-3 border-b border-slate-100 relative">
+                          <h4 className="font-bold text-xs text-slate-800 flex-1 text-center">
+                            Ảnh bìa
+                          </h4>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCardModalMenu(null);
+                              setMenuAnchorRect(null);
+                            }}
+                            className="absolute right-0 top-0 text-slate-400 hover:text-slate-700 p-1 rounded-full hover:bg-slate-100 cursor-pointer transition-colors"
+                          >
+                            ✕
+                          </button>
+                        </div>
+
+                        {/* Gỡ bỏ ảnh bìa nếu đang có */}
+                        {(selectedCard.card.coverUrl || selectedCard.card.coverColor) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleRemoveCover();
+                              setCardModalMenu(null);
+                              setMenuAnchorRect(null);
+                            }}
+                            className="w-full mb-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-md transition-colors cursor-pointer"
+                          >
+                            Gỡ bỏ ảnh bìa
+                          </button>
+                        )}
+
+                        {/* 1. Chọn màu bìa */}
+                        <div className="mb-4">
+                          <label className="text-[11px] font-bold text-slate-600 block mb-2 uppercase tracking-wider">
+                            Màu sắc
+                          </label>
+                          <div className="grid grid-cols-5 gap-2">
+                            {COVER_COLORS.map((col) => (
+                              <button
+                                key={col.id}
+                                type="button"
+                                onClick={() => handleSetCoverColor(col.class)}
+                                className={`h-8 rounded-lg ${col.class} hover:opacity-90 transition-all cursor-pointer relative flex items-center justify-center ${
+                                  selectedCard.card.coverColor === col.class ? "ring-2 ring-offset-2 ring-[#0c66e4]" : ""
+                                }`}
+                                title={col.name}
+                              >
+                                {selectedCard.card.coverColor === col.class && (
+                                  <svg className="w-4 h-4 text-white drop-shadow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                  </svg>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* 2. Ảnh từ Unsplash */}
+                        <div className="mb-3">
+                          <label className="text-[11px] font-bold text-slate-600 block mb-2 uppercase tracking-wider">
+                            Ảnh từ Unsplash
+                          </label>
+                          <div className="grid grid-cols-2 gap-2">
+                            {COVER_PHOTOS.map((url, i) => (
+                              <button
+                                key={i}
+                                type="button"
+                                onClick={() => handleSetCoverUrl(url)}
+                                className={`h-14 rounded-lg overflow-hidden border transition-all cursor-pointer relative ${
+                                  selectedCard.card.coverUrl === url ? "ring-2 ring-offset-2 ring-[#0c66e4] border-transparent" : "border-slate-200 hover:opacity-90"
+                                }`}
+                              >
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={url} alt="unsplash cover" className="w-full h-full object-cover" />
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* 3. Tải ảnh lên làm bìa */}
+                        <div>
+                          <label className="w-full flex items-center justify-center gap-1.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-md border border-slate-300 transition-colors cursor-pointer">
+                            <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                            </svg>
+                            Tải lên ảnh bìa
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  const url = URL.createObjectURL(file);
+                                  handleSetCoverUrl(url);
+                                  handleAddAttachment(file.name, url, (file.size / (1024 * 1024)).toFixed(1) + " MB");
+                                  setCardModalMenu(null);
+                                  setMenuAnchorRect(null);
+                                }
+                              }}
+                            />
+                          </label>
                         </div>
                       </div>
                     );
@@ -3563,6 +5823,7 @@ function BoardContent() {
                 </div>
               </div>
             )}
+            </div>
           </div>
         </div>
       )}

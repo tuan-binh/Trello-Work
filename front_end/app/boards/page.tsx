@@ -31,9 +31,9 @@ const PHOTO_OPTIONS = [
   },
   {
     id: "p3",
-    name: "Golden Sunset City",
-    thumb: "https://images.unsplash.com/photo-1477959858617-67f30bc75b82?auto=format&fit=crop&w=300&q=80",
-    full: "https://images.unsplash.com/photo-1477959858617-67f30bc75b82?auto=format&fit=crop&w=1600&q=85",
+    name: "Tropical Beach Horizon",
+    thumb: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=300&q=80",
+    full: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1600&q=85",
   },
   {
     id: "p4",
