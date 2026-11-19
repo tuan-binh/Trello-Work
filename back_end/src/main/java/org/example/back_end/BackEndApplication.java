@@ -25,7 +25,8 @@ public class BackEndApplication {
                 jdbcTemplate.execute("ALTER TABLE roles DROP CONSTRAINT IF EXISTS roles_name_check");
                 jdbcTemplate.execute("ALTER TABLE roles ALTER COLUMN name TYPE VARCHAR(50)");
                 jdbcTemplate.execute("ALTER TABLE activity_logs DROP CONSTRAINT IF EXISTS fkfxtkd8wg1dw7mv6ocsk63qde1");
-                jdbcTemplate.execute("ALTER TABLE activity_logs ADD CONSTRAINT fkfxtkd8wg1dw7mv6ocsk63qde1 FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE");
+                jdbcTemplate.execute(
+                        "ALTER TABLE activity_logs ADD CONSTRAINT fkfxtkd8wg1dw7mv6ocsk63qde1 FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE");
                 System.out.println(">>> SUCCESSFULLY UPDATED DB CONSTRAINTS WITH ON DELETE CASCADE <<<");
             } catch (Exception e) {
                 System.out.println(">>> FAILED TO ALTER CONSTRAINTS: " + e.getMessage());

@@ -30,6 +30,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { TextField, Checkbox } from "@mui/material";
 import {
   getBoardDetail,
+  getCardDetail,
   updateBoard,
   createList,
   updateList,
@@ -114,6 +115,7 @@ export interface CardItem {
   title: string;
   description?: string;
   labels: LabelItem[];
+  checklistId?: string;
   checklistTotal?: number;
   checklistDone?: number;
   checklistItems?: ChecklistItem[];
@@ -831,15 +833,18 @@ function BoardContent() {
               isCover: !!at.isCover,
             }));
 
+            const checklistTotal = c.checklistTotal !== undefined && c.checklistTotal !== null ? c.checklistTotal : checklistItems.length;
+            const checklistDone = c.checklistDone !== undefined && c.checklistDone !== null ? c.checklistDone : checklistItems.filter((it) => it.done).length;
+
             return {
               id: String(c.id),
               title: c.title,
               description: c.description || "",
               labels,
-              checklistTotal: checklistItems.length,
-              checklistDone: checklistItems.filter((it) => it.done).length,
+              checklistTotal,
+              checklistDone,
               checklistItems,
-              commentsCount: comments.length,
+              commentsCount: c.commentsCount !== undefined && c.commentsCount !== null ? c.commentsCount : comments.length,
               comments,
               activities: [],
               dueDate: c.dueDate || undefined,
@@ -996,9 +1001,10 @@ function BoardContent() {
     { id: "lbl_8", name: "High", color: "bg-[#ae2e24] text-white" },    // Đỏ đậm
   ]);
 
-  // Đồng bộ draft khi mở selectedCard
+  // Đồng bộ draft và fetch chi tiết khi mở selectedCard
   useEffect(() => {
     if (selectedCard) {
+      const cardId = selectedCard.card.id;
       setCardDescriptionDraft(selectedCard.card.description || "");
       setIsEditingDescription(false);
       setIsAddingChecklistItem(false);
@@ -1025,6 +1031,104 @@ function BoardContent() {
         setSelectedDay(7);
         setDueDateInputStr("7/11/2026");
       }
+
+      // Tải chi tiết thẻ từ backend (Checklists, ChecklistItems, Comments, Attachments, Activities)
+      getCardDetail(cardId)
+        .then((detail) => {
+          if (!detail) return;
+
+          const checklistItems: ChecklistItem[] = [];
+          let primaryChecklistId: string | undefined = undefined;
+
+          if (detail.checklists && Array.isArray(detail.checklists)) {
+            if (detail.checklists.length > 0) {
+              primaryChecklistId = String(detail.checklists[0].id);
+            }
+            detail.checklists.forEach((chk) => {
+              if (chk.items && Array.isArray(chk.items)) {
+                chk.items.forEach((item) => {
+                  checklistItems.push({
+                    id: String(item.id),
+                    text: item.text || "",
+                    done: !!item.done,
+                  });
+                });
+              }
+            });
+          }
+
+          const comments: CommentItem[] = (detail.comments || []).map((cm) => ({
+            id: String(cm.id),
+            author: (cm.author || cm.initials || "U").charAt(0).toUpperCase(),
+            authorName: cm.author || "Người dùng",
+            avatarBg: cm.avatarBg || "bg-blue-600",
+            text: cm.text || "",
+            createdAt: cm.createdAt || "Vừa xong",
+            timestamp: Date.now(),
+          }));
+
+          const attachments: AttachmentItem[] = (detail.attachments || []).map((at) => ({
+            id: String(at.id),
+            name: at.name || "Tệp đính kèm",
+            url: at.url || "",
+            size: at.size || "1.0 MB",
+            createdAt: at.createdAt || "Vừa xong",
+            isCover: !!at.isCover,
+          }));
+
+          const activities: ActivityItem[] = (detail.activities || []).map((act) => ({
+            id: String(act.id),
+            author: (act.author || "U").charAt(0).toUpperCase(),
+            authorName: act.author || "Người dùng",
+            avatarBg: "bg-blue-600",
+            actionText: act.actionText || "",
+            targetText: act.targetText || undefined,
+            createdAt: act.createdAt || "Vừa xong",
+            timestamp: Date.now(),
+          }));
+
+          const updatedFields: Partial<CardItem> = {
+            description: detail.description !== undefined ? (detail.description || "") : undefined,
+            checklistId: primaryChecklistId,
+            checklistItems,
+            checklistTotal: checklistItems.length,
+            checklistDone: checklistItems.filter((i) => i.done).length,
+            comments,
+            commentsCount: comments.length,
+            attachments,
+            activities,
+          };
+
+          if (detail.description !== undefined && detail.description !== null) {
+            setCardDescriptionDraft(detail.description);
+          }
+
+          setSelectedCard((prev) => {
+            if (prev && prev.card.id === cardId) {
+              return {
+                ...prev,
+                card: {
+                  ...prev.card,
+                  ...updatedFields,
+                },
+              };
+            }
+            return prev;
+          });
+
+          setBoard((prevBoard) => ({
+            ...prevBoard,
+            lists: prevBoard.lists.map((l) => ({
+              ...l,
+              cards: l.cards.map((c) =>
+                c.id === cardId ? { ...c, ...updatedFields } : c
+              ),
+            })),
+          }));
+        })
+        .catch((err) => {
+          console.warn("Lỗi tải chi tiết thẻ từ Backend API:", err);
+        });
     }
   }, [selectedCard?.card.id]);
 
@@ -1185,10 +1289,22 @@ function BoardContent() {
     setIsAddingChecklistItem(false);
 
     try {
-      // Backend: tạo checklist nếu chưa có hoặc thêm vào checklist đầu tiên
-      const createdChecklist = await createChecklist(selectedCard.card.id, "Việc cần làm");
-      if (createdChecklist && createdChecklist.id) {
-        const addedItem = await addChecklistItem(createdChecklist.id, text);
+      let targetChecklistId = selectedCard.card.checklistId;
+
+      if (!targetChecklistId) {
+        // Tạo checklist mới nếu chưa có
+        const createdChecklist = await createChecklist(selectedCard.card.id, "Việc cần làm");
+        if (createdChecklist && createdChecklist.id) {
+          targetChecklistId = String(createdChecklist.id);
+          updateCurrentCard((c) => ({
+            ...c,
+            checklistId: targetChecklistId,
+          }));
+        }
+      }
+
+      if (targetChecklistId) {
+        const addedItem = await addChecklistItem(targetChecklistId, text);
         if (addedItem && addedItem.id) {
           updateCurrentCard((c) => ({
             ...c,
@@ -1927,29 +2043,36 @@ function BoardContent() {
       });
     }
 
-    // Đối với kéo Card:
-    // 1. Tìm xem pointer có nằm bên trong thẻ/cột nào không
+    // Khi đang kéo Card:
+    // 1. Tìm pointerWithin
     const pointerCollisions = pointerWithin(args);
     if (pointerCollisions.length > 0) {
-      // Ưu tiên va chạm với Card trước
       const cardCollision = pointerCollisions.find((c) => c.data?.current?.type === "Card");
       if (cardCollision) {
         return [cardCollision];
       }
+      const colCollision = pointerCollisions.find((c) => c.data?.current?.type === "Column");
+      if (colCollision) {
+        return [colCollision];
+      }
       return pointerCollisions;
     }
 
-    // 2. Nếu pointer không va chạm trực tiếp, dùng rectIntersection với ưu tiên Card
+    // 2. rectIntersection
     const rectCollisions = rectIntersection(args);
     if (rectCollisions.length > 0) {
       const cardCollision = rectCollisions.find((c) => c.data?.current?.type === "Card");
       if (cardCollision) {
         return [cardCollision];
       }
+      const colCollision = rectCollisions.find((c) => c.data?.current?.type === "Column");
+      if (colCollision) {
+        return [colCollision];
+      }
       return rectCollisions;
     }
 
-    // 3. Fallback dùng closestCorners
+    // 3. Fallback closestCorners chỉ tìm các droppable Card hoặc Column
     return closestCorners(args);
   };
 
@@ -2081,10 +2204,10 @@ function BoardContent() {
     if (isActiveACard && isOverACard) {
       setBoard((prev) => {
         const activeListIndex = prev.lists.findIndex((l) =>
-          l.cards.some((c) => c.id === activeId)
+          l.cards.some((c) => String(c.id) === String(activeId))
         );
         const overListIndex = prev.lists.findIndex((l) =>
-          l.cards.some((c) => c.id === overId)
+          l.cards.some((c) => String(c.id) === String(overId))
         );
 
         if (activeListIndex === -1 || overListIndex === -1) return prev;
@@ -2092,8 +2215,8 @@ function BoardContent() {
         const activeList = prev.lists[activeListIndex];
         const overList = prev.lists[overListIndex];
 
-        const activeCardIndex = activeList.cards.findIndex((c) => c.id === activeId);
-        const overCardIndex = overList.cards.findIndex((c) => c.id === overId);
+        const activeCardIndex = activeList.cards.findIndex((c) => String(c.id) === String(activeId));
+        const overCardIndex = overList.cards.findIndex((c) => String(c.id) === String(overId));
 
         if (activeListIndex === overListIndex) {
           const reorderedCards = arrayMove(activeList.cards, activeCardIndex, overCardIndex);
@@ -2120,9 +2243,9 @@ function BoardContent() {
     if (isActiveACard && isOverAColumn) {
       setBoard((prev) => {
         const activeListIndex = prev.lists.findIndex((l) =>
-          l.cards.some((c) => c.id === activeId)
+          l.cards.some((c) => String(c.id) === String(activeId))
         );
-        const overListIndex = prev.lists.findIndex((l) => l.id === overId);
+        const overListIndex = prev.lists.findIndex((l) => String(l.id) === String(overId));
 
         if (activeListIndex === -1 || overListIndex === -1) return prev;
         if (activeListIndex === overListIndex) return prev;
@@ -2130,12 +2253,10 @@ function BoardContent() {
         const activeList = prev.lists[activeListIndex];
         const overList = prev.lists[overListIndex];
 
-        const activeCardIndex = activeList.cards.findIndex((c) => c.id === activeId);
+        const activeCardIndex = activeList.cards.findIndex((c) => String(c.id) === String(activeId));
         const activeCards = [...activeList.cards];
         const [movedCard] = activeCards.splice(activeCardIndex, 1);
 
-        // Tính toán vị trí thả vào cột dựa theo tọa độ con trỏ/thẻ kéo
-        // Nếu overList đã có cards, kiểm tra xem đang kéo ở nửa trên hay nửa dưới cột
         let newIndex = overList.cards.length;
         if (overList.cards.length > 0 && over.rect) {
           const overTop = over.rect.top;
@@ -2143,7 +2264,6 @@ function BoardContent() {
           const activeCurrentTop =
             active.rect.current.translated?.top ?? active.rect.current.initial?.top;
           if (activeCurrentTop !== undefined) {
-            // Nếu vị trí thẻ đang kéo gần đỉnh cột hơn đáy cột, chèn lên đầu hoặc giữa
             const midPoint = overTop + (overBottom - overTop) / 2;
             if (activeCurrentTop < midPoint) {
               newIndex = 0;
@@ -2180,8 +2300,8 @@ function BoardContent() {
     const isActiveAColumn = active.data.current?.type === "Column";
     if (isActiveAColumn) {
       setBoard((prev) => {
-        const oldIndex = prev.lists.findIndex((l) => l.id === activeId);
-        const newIndex = prev.lists.findIndex((l) => l.id === overId);
+        const oldIndex = prev.lists.findIndex((l) => String(l.id) === String(activeId));
+        const newIndex = prev.lists.findIndex((l) => String(l.id) === String(overId));
         if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return prev;
         const reordered = arrayMove(prev.lists, oldIndex, newIndex);
         
@@ -2204,10 +2324,9 @@ function BoardContent() {
 
     const isActiveACard = active.data.current?.type === "Card";
     if (isActiveACard) {
-      // Tìm vị trí hiện tại của card sau khi kéo thả kết thúc để đồng bộ backend
       setBoard((currentBoard) => {
         for (const l of currentBoard.lists) {
-          const cardIdx = l.cards.findIndex((c) => c.id === activeId);
+          const cardIdx = l.cards.findIndex((c) => String(c.id) === String(activeId));
           if (cardIdx !== -1) {
             moveCard(String(activeId), {
               targetListId: Number(l.id) || 1,
